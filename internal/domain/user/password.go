@@ -10,14 +10,14 @@ const (
 	maxPasswordLenght = 128
 )
 
-type PassWordHash struct {
+type PasswordHash struct {
 	value string
 }
 
-func ValidatePlainPassword(password string) string {
+func ValidatePlainPassword(password string) error {
 	lenght := utf8.RuneCountInString(password)
 
-	if lenght < minPasswordLength || lenght > maxPasswordLenght {
+	if lenght < minPasswordLenght || lenght > maxPasswordLenght {
 		return ErrInvalidPassword
 	}
 

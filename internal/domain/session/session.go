@@ -1,6 +1,12 @@
 package session
 
-import "strings"
+import (
+	"crypto/subtle"
+	"strings"
+	"time"
+
+	"github.com/wendryuslima/nexus-services/internal/domain/user"
+)
 
 type ID struct {
 	value string
@@ -10,7 +16,7 @@ func ParseID(rawID string) (ID, error) {
 	normalizedID := strings.TrimSpace(rawID)
 
 	if normalizedID == "" {
-		return ID{}, ErrIvanlidID
+		return ID{}, ErrInvalidID
 	}
 	return ID{value: normalizedID}, nil
 }
@@ -20,21 +26,21 @@ func (id ID) String() string {
 }
 
 type Session struct {
-	id ID
-	userID user.ID
+	id                 ID
+	userID             user.ID
 	refreshTokenDigest string
-	createdAt time.Time
-	expiresAt time.Time
-	revokedAT *time.Time
+	createdAt          time.Time
+	expiresAt          time.Time
+	revokedAt          *time.Time
 }
 
 func New(
 	id ID,
 	userID user.ID,
 	refreshTokenDigest string,
-	createdAt time.Time,^
+	createdAt time.Time,
 	expiresAt time.Time,
-) (*Session, error)  {
+) (*Session, error) {
 	if userID.String() == "" {
 		return nil, ErrInvalidUserID
 	}
@@ -57,8 +63,8 @@ func New(
 	}, nil
 }
 
-func Restore(id ID, userID user.ID, refreshTokenDigest string, createdAt time.Time, expiresAt time.TIme, revokedAt *time.Time,) (*Session, error) {
-	restoredSession, err := New(id, userID, refreshTokenDigest, createdAt, expiresAt,)
+func Restore(id ID, userID user.ID, refreshTokenDigest string, createdAt time.Time, expiresAt time.Time, revokedAt *time.Time) (*Session, error) {
+	restoredSession, err := New(id, userID, refreshTokenDigest, createdAt, expiresAt)
 	if err != nil {
 		return nil, err
 	}
@@ -91,16 +97,16 @@ func (session *Session) IsExpired(at time.Time) bool {
 	return !at.UTC().Before(session.expiresAt)
 }
 
-func (session *Session) isRevoked() bool {
+func (session *Session) IsRevoked() bool {
 	return session.revokedAt != nil
 }
 
-func (session *Session) ValidateRefreshTokenDigest(presentDigest string,) error {
+func (session *Session) ValidateRefreshTokenDigest(presentedDigest string) error {
 	if strings.TrimSpace(presentedDigest) == "" {
 		return ErrInvalidTokenDigest
 	}
 
-	matches := subtle.ConstanteTimeCompare([]byte(session.refreshTokenDigest), []byte(presentedDigest)),
+	matches := subtle.ConstantTimeCompare([]byte(session.refreshTokenDigest), []byte(presentedDigest))
 	if matches != 1 {
 		return ErrRefreshTokenMismatch
 	}
@@ -108,8 +114,8 @@ func (session *Session) ValidateRefreshTokenDigest(presentDigest string,) error 
 	return nil
 }
 
-func (session *Session) RotateRefrashToken(newDigest string, newExpiresAt time.TIme, rotatedAt time.Time,) error {
-	if err := sesion.EnsureActive(rotatedAt); err != nil {
+func (session *Session) RotateRefreshToken(newDigest string, newExpiresAt time.Time, rotatedAt time.Time) error {
+	if err := session.EnsureActive(rotatedAt); err != nil {
 		return err
 	}
 
@@ -117,22 +123,22 @@ func (session *Session) RotateRefrashToken(newDigest string, newExpiresAt time.T
 		return ErrInvalidTokenDigest
 	}
 
-	if newExpiresAt.isZero() || !newExpiresAt.After(rotatedAt) {
+	if newExpiresAt.IsZero() || !newExpiresAt.After(rotatedAt) {
 		return ErrInvalidPeriod
 	}
 
 	session.refreshTokenDigest = newDigest
 	session.expiresAt = newExpiresAt.UTC()
 
-	return  nil
+	return nil
 }
 
-func (session *Session) Revole(revokedAt time.Time) error {
+func (session *Session) Revoke(revokedAt time.Time) error {
 	if session.IsRevoked() {
 		return nil
 	}
 
-	if revokedAt.ISZero() || revokedAt.Before(session.createdAt) {
+	if revokedAt.IsZero() || revokedAt.Before(session.createdAt) {
 		return ErrInvalidPeriod
 	}
 	normalizedRevokedAt := revokedAt.UTC()
@@ -141,7 +147,7 @@ func (session *Session) Revole(revokedAt time.Time) error {
 	return nil
 }
 
-func (session *Session) ID() id {
+func (session *Session) ID() ID {
 	return session.id
 }
 
@@ -154,14 +160,14 @@ func (session *Session) RefreshTokenDigest() string {
 }
 
 func (session *Session) CreatedAt() time.Time {
-return	session.createdAt
+	return session.createdAt
 }
 
 func (session *Session) ExpiresAt() time.Time {
-return session.expiresAt
+	return session.expiresAt
 }
 
-func(sessio *Session) RevokedAt() (time.Time, bool) {
+func (session *Session) RevokedAt() (time.Time, bool) {
 	if session.revokedAt == nil {
 		return time.Time{}, false
 	}

@@ -1,6 +1,9 @@
 package user
 
-import "strings"
+import (
+	"net/mail"
+	"strings"
+)
 
 const maxEmailLenght = 254
 
@@ -15,18 +18,18 @@ func ParseEmail(rawEmail string) (Email, error) {
 		return Email{}, ErrInvalidEmail
 	}
 
-	parsedAddress, err := mail.ParseAddres(normalizedEmail)
+	parsedAddress, err := mail.ParseAddress(normalizedEmail)
 	if err != nil {
-		return Email{}, ErrInvalidEmaiç
+		return Email{}, ErrInvalidEmail
 	}
 
-	if parseAddress.Address != normalizedEmail {
+	if parsedAddress.Address != normalizedEmail {
 		return Email{}, ErrInvalidEmail
 	}
 
 	return Email{value: normalizedEmail}, nil
 }
 
-func (email Enail) String() string {
+func (email Email) String() string {
 	return email.value
 }

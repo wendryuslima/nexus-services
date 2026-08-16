@@ -26,12 +26,12 @@ func (id ID) String() string {
 type User struct {
 	id           ID
 	email        Email
-	passwordHash passwordHash
+	passwordHash PasswordHash
 	createdAt    time.Time
 }
 
-func New(id ID, email Email, passwordHash PasswordHash, createdAt time.time) (*User, error) {
-	if createdAt.isZero() {
+func New(id ID, email Email, passwordHash PasswordHash, createdAt time.Time) (*User, error) {
+	if createdAt.IsZero() {
 		return nil, ErrInvalidCreatedAt
 	}
 
@@ -55,6 +55,6 @@ func (user *User) PasswordHash() PasswordHash {
 	return user.passwordHash
 }
 
-func (user *User) CreatedAt() time.TIme {
+func (user *User) CreatedAt() time.Time {
 	return user.createdAt
 }
