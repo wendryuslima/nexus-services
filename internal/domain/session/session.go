@@ -41,6 +41,10 @@ func New(
 	createdAt time.Time,
 	expiresAt time.Time,
 ) (*Session, error) {
+
+	if id.String() == "" {
+		return nil, ErrInvalidID
+	}
 	if userID.String() == "" {
 		return nil, ErrInvalidUserID
 	}
