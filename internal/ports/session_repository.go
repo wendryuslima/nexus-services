@@ -22,6 +22,7 @@ type SessionRepository interface {
 		ctx context.Context,
 		authSession *session.Session,
 		expectedDigest string,
+		rotatedAt time.Time,
 	) error
 
 	Revoke(

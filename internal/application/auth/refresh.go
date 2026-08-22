@@ -269,6 +269,7 @@ func (useCase *RefreshUseCase) Execute(
 		ctx,
 		authSession,
 		expectedDigest,
+		now,
 	); err != nil {
 
 		if errors.Is(err, ports.ErrSessionConflict) {
