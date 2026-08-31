@@ -77,7 +77,7 @@ type CookieConfig struct {
 type AuthConfig struct {
 	Environment     Environment
 	AccessTokenTTL  time.Duration
-	RefreshTOkenTTL time.Duration
+	RefreshTokenTTL time.Duration
 	JWT             JWTConfig
 	Cookies         CookieConfig
 }
@@ -141,7 +141,7 @@ func LoadAuthConfig() (AuthConfig, error) {
 	config := AuthConfig{
 		Environment:     environment,
 		AccessTokenTTL:  accessTokenTTL,
-		RefreshTOkenTTL: refreshTokenTTL,
+		RefreshTokenTTL: refreshTokenTTL,
 		JWT: JWTConfig{
 			Issuer:        issuer,
 			Audience:      audience,
@@ -167,14 +167,14 @@ func (config AuthConfig) Validate() error {
 		return fmt.Errorf("%w: unknown environment", ErrInvalidAuthConfig)
 	}
 
-	if config.AccessTokenTTL < maximumAccessTokenTTL ||
+	if config.AccessTokenTTL < minimumAccessTokenTTL ||
 		config.AccessTokenTTL > maximumAccessTokenTTL {
 		return fmt.Errorf("%w: access token TTL is outside allowed limits", ErrInvalidAuthConfig)
 
 	}
-	if config.RefreshTOkenTTL < minimumRefreshTokenTTL ||
-		config.RefreshTOkenTTL > maximumAccessTokenTTL ||
-		config.RefreshTOkenTTL <= config.AccessTokenTTL {
+	if config.RefreshTokenTTL < minimumRefreshTokenTTL ||
+		config.RefreshTokenTTL > maximumRefreshTokenTTL ||
+		config.RefreshTokenTTL <= config.AccessTokenTTL {
 		return fmt.Errorf("%w: refresh token TTL is outside allowed limits", ErrInvalidAuthConfig)
 	}
 
@@ -228,7 +228,8 @@ func (config AuthConfig) Validate() error {
 		}
 	}
 
-	if !strings.HasPrefix(config.Cookies.RefreshName, "__Host-") {
+	if config.Cookies.Secure &&
+		!strings.HasPrefix(config.Cookies.RefreshName, "__Host-") {
 		return fmt.Errorf("%w: secure refresh cookie must use __Host-", ErrInvalidAuthConfig)
 	}
 

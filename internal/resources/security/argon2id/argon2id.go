@@ -46,7 +46,7 @@ type Hasher struct {
 
 func DefaultParameters() Parameters {
 	return Parameters{
-		Memory:      10 * 1024,
+		Memory:      19 * 1024,
 		Iterations:  2,
 		Parallelism: 1,
 		SaltLenght:  16,

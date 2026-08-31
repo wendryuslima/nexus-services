@@ -44,7 +44,7 @@ func NewLogoutHandler(useCase LogoutExecutor, cookieManager LogoutCookieManager,
 	}, nil
 }
 
-func (handler *LogoutHandler) ServerHTTP(writer http.ResponseWriter, httpRequest *http.Request) {
+func (handler *LogoutHandler) ServeHTTP(writer http.ResponseWriter, httpRequest *http.Request) {
 	if httpRequest.Method != http.MethodPost {
 		writer.Header().Set("Allow", http.MethodPost)
 

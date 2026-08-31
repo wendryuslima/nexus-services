@@ -37,7 +37,7 @@ func NewManager(config Config, clock ports.Clock) (*Manager, error) {
 	}, nil
 }
 
-func (manager *Manager) SetToken(writer http.ResponseWriter, accessToken string, accessTokenExpireAt time.Time, refreshToken string, refreshExpiresAt time.Time) error {
+func (manager *Manager) SetTokens(writer http.ResponseWriter, accessToken string, accessTokenExpireAt time.Time, refreshToken string, refreshExpiresAt time.Time) error {
 	if strings.TrimSpace(accessToken) == "" || strings.TrimSpace(refreshToken) == "" {
 		return ErrEmptyToken
 	}
@@ -209,7 +209,7 @@ func validateConfig(config Config) error {
 		}
 	}
 
-	if !strings.HasPrefix(config.RefreshName, "__Host-") {
+	if config.Secure && !strings.HasPrefix(config.RefreshName, "__Host-") {
 		return fmt.Errorf(
 			"%w: secure refresh cookie must use __Host-",
 			ErrInvalidConfig,
