@@ -8,4 +8,5 @@ var (
 	ErrInvalidMongoDBConfig       = errors.New("invalid MongoDB configuratio")
 	ErrInvalidAuthConfig          = errors.New("invalid authentication configuration")
 	ErrInvalidHTTPConfig          = errors.New("invalid HTTP configuration")
+	ErrInvalidCORSConfig          = errors.New("invalid CORS configuration")
 )

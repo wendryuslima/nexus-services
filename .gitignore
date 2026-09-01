@@ -1,0 +1,18 @@
+.env# Segredos e configurações locais
+.env
+.env.*
+!.env.example
+
+# Binários e artefatos
+bin/
+build/
+dist/
+tmp/
+coverage/
+*.exe
+*.out
+*.log
+
+# Editores
+.vscode/
+.idea/

@@ -1,0 +1,102 @@
+name: nexus
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    init: true
+    restart: unless-stopped
+
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+    ports:
+      - "${HTTP_PORT:?HTTP_PORT is required}:8080"
+
+    environment:
+      HTTP_ADDRESS: "${HTTP_ADDRESS:?HTTP_ADDRESS is required}"
+      HTTP_READ_HEADER_TIMEOUT: "${HTTP_READ_HEADER_TIMEOUT:?HTTP_READ_HEADER_TIMEOUT is required}"
+      HTTP_READ_TIMEOUT: "${HTTP_READ_TIMEOUT:?HTTP_READ_TIMEOUT is required}"
+      HTTP_WRITE_TIMEOUT: "${HTTP_WRITE_TIMEOUT:?HTTP_WRITE_TIMEOUT is required}"
+      HTTP_IDLE_TIMEOUT: "${HTTP_IDLE_TIMEOUT:?HTTP_IDLE_TIMEOUT is required}"
+      HTTP_SHUTDOWN_TIMEOUT: "${HTTP_SHUTDOWN_TIMEOUT:?HTTP_SHUTDOWN_TIMEOUT is required}"
+      HTTP_MAX_HEADER_BYTES: "${HTTP_MAX_HEADER_BYTES:?HTTP_MAX_HEADER_BYTES is required}"
+      HTTP_ALLOWED_ORIGINS: "${HTTP_ALLOWED_ORIGINS:?HTTP_ALLOWED_ORIGINS is required}"
+      MONGODB_DATABASE: "${MONGODB_DATABASE:?MONGODB_DATABASE is required}"
+      MONGODB_URI: "${MONGODB_URI:?MONGODB_URI is required}"
+     
+      MONGODB_CONNECT_TIMEOUT: "${MONGODB_CONNECT_TIMEOUT:?MONGODB_CONNECT_TIMEOUT is required}"
+      MONGODB_OPERATION_TIMEOUT: "${MONGODB_OPERATION_TIMEOUT:?MONGODB_OPERATION_TIMEOUT is required}"
+
+      JWT_ISSUER: "${JWT_ISSUER:?JWT_ISSUER is required}"
+      JWT_AUDIENCE: "${JWT_AUDIENCE:?JWT_AUDIENCE is required}"
+      JWT_ACCESS_SECRET: "${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required}"
+      JWT_REFRESH_SECRET: "${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required}"
+      JWT_ACCESS_TTL: "${JWT_ACCESS_TTL:?JWT_ACCESS_TTL is required}"
+      JWT_REFRESH_TTL: "${JWT_REFRESH_TTL:?JWT_REFRESH_TTL is required}"
+      REFRESH_TOKEN_PEPPER: "${REFRESH_TOKEN_PEPPER:?REFRESH_TOKEN_PEPPER is required}"
+
+      AUTH_ACCESS_COOKIE_NAME: "${AUTH_ACCESS_COOKIE_NAME:?AUTH_ACCESS_COOKIE_NAME is required}"
+      AUTH_REFRESH_COOKIE_NAME: "${AUTH_REFRESH_COOKIE_NAME:?AUTH_REFRESH_COOKIE_NAME is required}"
+      AUTH_COOKIE_DOMAIN: "${AUTH_COOKIE_DOMAIN:-}"
+      AUTH_COOKIE_PATH: "${AUTH_COOKIE_PATH:?AUTH_COOKIE_PATH is required}"
+      AUTH_COOKIE_SECURE: "${AUTH_COOKIE_SECURE:?AUTH_COOKIE_SECURE is required}"
+      AUTH_COOKIE_SAME_SITE: "${AUTH_COOKIE_SAME_SITE:?AUTH_COOKIE_SAME_SITE is required}"
+
+    read_only: true
+
+    tmpfs:
+      - "/tmp:size=16m,noexec,nosuid"
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - "no-new-privileges:true"
+
+    stop_grace_period: 20s
+
+    networks:
+      - backend
+
+  mongodb:
+    image: mongo:8.0.29-noble
+    restart: unless-stopped
+
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: "${MONGO_ROOT_USERNAME:?MONGO_ROOT_USERNAME is required}"
+      MONGO_INITDB_ROOT_PASSWORD: "${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}"
+      MONGO_INITDB_DATABASE: "admin"
+      MONGO_APP_DATABASE: "${MONGO_APP_DATABASE:?MONGO_APP_DATABASE is required}"
+     
+      
+
+    volumes:
+      - mongodb_data:/data/db
+      
+
+    healthcheck:
+      test:
+        - "CMD"
+        - "mongosh"
+        - "mongodb://localhost:27017/admin"
+        - "--quiet"
+        - "--eval"
+        - "quit(db.adminCommand('ping').ok ? 0 : 2)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+    networks:
+      - backend
+
+volumes:
+  mongodb_data:
+
+networks:
+  backend:
+    driver: bridge
