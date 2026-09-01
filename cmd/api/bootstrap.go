@@ -6,8 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
-	"strings"
+
 	"time"
 
 	applicationauth "github.com/wendryuslima/nexus-services/internal/application/auth"
@@ -33,7 +32,6 @@ const (
 	corsPreflightMaxAge     = 10 * time.Minute
 	usersCollectionName     = "users"
 	sessionsCollectionName  = "sessions"
-	allowedOriginsEnv       = "CORS_ALLOWED_ORIGINS"
 )
 
 func run(ctx context.Context, logger *slog.Logger) (runErr error) {
@@ -198,30 +196,15 @@ func loadConfiguration() (applicationConfig, error) {
 	if err != nil {
 		return applicationConfig{}, fmt.Errorf("load HTTP configuration: %w", err)
 	}
-	allowedOrigins, err := loadAllowedOrigins()
+	allowedOrigins, err := config.LoadAllowedOrigins()
 	if err != nil {
-		return applicationConfig{}, err
+		return applicationConfig{}, fmt.Errorf(
+			"load allowed origins: %w",
+			err,
+		)
 	}
 
 	return applicationConfig{mongoDB: mongoConfig, auth: authConfig, http: httpConfig, allowedOrigins: allowedOrigins}, nil
-}
-
-func loadAllowedOrigins() ([]string, error) {
-	rawOrigins := strings.TrimSpace(os.Getenv(allowedOriginsEnv))
-	if rawOrigins == "" {
-		return nil, fmt.Errorf("load allowed origins: %s is required", allowedOriginsEnv)
-	}
-	origins := strings.Split(rawOrigins, ",")
-	result := make([]string, 0, len(origins))
-	for _, origin := range origins {
-		if normalized := strings.TrimSpace(origin); normalized != "" {
-			result = append(result, normalized)
-		}
-	}
-	if len(result) == 0 {
-		return nil, fmt.Errorf("load allowed origins: %s must contain at least one origin", allowedOriginsEnv)
-	}
-	return result, nil
 }
 
 func authCookieConfig(cookieConfig config.CookieConfig) authcookie.Config {

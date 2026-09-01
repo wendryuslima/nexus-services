@@ -15,7 +15,7 @@ const (
 	refreshTokenTTLEnvironment     = "AUTH_REFRESH_TOKEN_TTL"
 	jwtIssuerEnvironment           = "JWT_ISSUER"
 	jwtAudienceEnvironment         = "JWT_AUDIENCE"
-	jwtAccessSecretEnvironment     = "JWT_ACESS_SECRET_BASE64"
+	jwtAccessSecretEnvironment     = "JWT_ACCESS_SECRET_BASE64"
 	jwtRefreshSecretEnvironment    = "JWT_REFRESH_SECRET_BASE64"
 	jwtLeewayEnvironment           = "JWT_LEEWAY"
 	cookieSecureEnvironment        = "AUTH_COOKIE_SECURE"
