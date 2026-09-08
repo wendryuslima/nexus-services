@@ -48,7 +48,7 @@ func (handler *LogoutHandler) ServeHTTP(writer http.ResponseWriter, httpRequest 
 	if httpRequest.Method != http.MethodPost {
 		writer.Header().Set("Allow", http.MethodPost)
 
-		writePublicError(handler.logger, writer, http.StatusMethodNotAllowed, "method_not_allowed", "The requested method is not allowed")
+		writePublicError(handler.logger, writer, http.StatusMethodNotAllowed, "method_not_allowed", "Esta ação não está disponível.")
 		return
 	}
 
@@ -72,7 +72,7 @@ func (handler *LogoutHandler) ServeHTTP(writer http.ResponseWriter, httpRequest 
 func (handler *LogoutHandler) completeLogout(writer http.ResponseWriter, httpRequest *http.Request) {
 	if err := handler.cookieManager.Clear(writer); err != nil {
 		handler.logger.ErrorContext(httpRequest.Context(), "failed to clear logout authentication cookies", slog.Any("error", err), slog.String("method", httpRequest.Method), slog.String("route", "v1/auth/logout"))
-		writePublicError(handler.logger, writer, http.StatusInternalServerError, "interal_error", "An internal error ocurred")
+		writePublicError(handler.logger, writer, http.StatusInternalServerError, "internal_error", "Não foi possível concluir a solicitação. Tente novamente mais tarde.")
 		return
 	}
 	writeNoContent(writer)
@@ -83,7 +83,7 @@ func (handler *LogoutHandler) handleUseCaseError(writer http.ResponseWriter, htt
 	case errors.Is(err, context.Canceled):
 		return
 	case errors.Is(err, context.DeadlineExceeded):
-		writePublicError(handler.logger, writer, http.StatusGatewayTimeout, "request_timeout", "The request could not be completed in time.")
+		writePublicError(handler.logger, writer, http.StatusGatewayTimeout, "request_timeout", "Não foi possível concluir a solicitação a tempo. Tente novamente.")
 	default:
 		handler.logger.ErrorContext(
 			httpRequest.Context(),
@@ -92,6 +92,6 @@ func (handler *LogoutHandler) handleUseCaseError(writer http.ResponseWriter, htt
 			slog.String("method", httpRequest.Method),
 			slog.String("route", "/v1/auth/logout"),
 		)
-		writePublicError(handler.logger, writer, http.StatusServiceUnavailable, "logout_unavailable", "Logout could not be completed. Please try again.")
+		writePublicError(handler.logger, writer, http.StatusServiceUnavailable, "logout_unavailable", "Não foi possível sair da sua conta. Tente novamente.")
 	}
 }

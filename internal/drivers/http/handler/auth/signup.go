@@ -58,7 +58,7 @@ func (handler *SignupHandler) ServeHTTP(writer http.ResponseWriter, httpRequest 
 	if httpRequest.Method != http.MethodPost {
 		writer.Header().Set("Allow", http.MethodPost)
 
-		writePublicError(handler.logger, writer, http.StatusMethodNotAllowed, "method_not_allowed", "The requested method is not allowed")
+		writePublicError(handler.logger, writer, http.StatusMethodNotAllowed, "method_not_allowed", "Esta ação não está disponível.")
 		return
 	}
 
@@ -96,25 +96,25 @@ func (handler *SignupHandler) ServeHTTP(writer http.ResponseWriter, httpRequest 
 func (handler *SignupHandler) handleUseCaseError(writer http.ResponseWriter, httpRequest *http.Request, err error) {
 	switch {
 	case errors.Is(err, user.ErrInvalidEmail):
-		writePublicError(handler.logger, writer, http.StatusUnprocessableEntity, "invalid_email", "The provided email is invalid.")
+		writePublicError(handler.logger, writer, http.StatusUnprocessableEntity, "invalid_email", "Informe um e-mail válido.")
 	case errors.Is(err, user.ErrInvalidPassword):
 		writePublicError(
 			handler.logger,
 			writer,
 			http.StatusUnprocessableEntity,
 			"invalid_password",
-			"The password does not meet the requirements",
+			"A senha não atende aos requisitos necessários.",
 		)
 	case errors.Is(err, auth.ErrEmailAlreadyRegistred):
-		writePublicError(handler.logger, writer, http.StatusConflict, "email_already_registered", "The email is already registered")
+		writePublicError(handler.logger, writer, http.StatusConflict, "email_already_registered", "Este e-mail já está cadastrado.")
 	case errors.Is(err, context.Canceled):
 		return
 	case errors.Is(err, context.DeadlineExceeded):
-		writePublicError(handler.logger, writer, http.StatusGatewayTimeout, "request_timeout", "The request could not be completed in time.")
+		writePublicError(handler.logger, writer, http.StatusGatewayTimeout, "request_timeout", "Não foi possível concluir a solicitação a tempo. Tente novamente.")
 
 	default:
 		handler.logger.ErrorContext(httpRequest.Context(), "signup use case failed", slog.Any("error", err), slog.String("method", httpRequest.Method), slog.String("router", "/v1/auth/signup"))
 
-		writePublicError(handler.logger, writer, http.StatusInternalServerError, "internal_error", "An internal")
+		writePublicError(handler.logger, writer, http.StatusInternalServerError, "internal_error", "Não foi possível concluir a solicitação. Tente novamente mais tarde.")
 	}
 }

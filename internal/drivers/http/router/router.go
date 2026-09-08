@@ -162,7 +162,7 @@ func newNotFoundHandler(
 				writer,
 				http.StatusNotFound,
 				"route_not_found",
-				"The requested route does not exist.",
+				"A página solicitada não foi encontrada.",
 			); err != nil {
 				logger.ErrorContext(
 					httpRequest.Context(),

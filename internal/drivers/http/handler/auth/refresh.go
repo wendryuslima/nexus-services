@@ -75,7 +75,7 @@ func (handler *RefreshHandler) ServeHTTP(
 			writer,
 			http.StatusMethodNotAllowed,
 			"method_not_allowed",
-			"The requested method is not allowed.",
+			"Esta ação não está disponível.",
 		)
 
 		return
@@ -134,7 +134,7 @@ func (handler *RefreshHandler) ServeHTTP(
 			writer,
 			http.StatusInternalServerError,
 			"internal_error",
-			"An internal error occurred.",
+			"Não foi possível concluir a solicitação. Tente novamente mais tarde.",
 		)
 
 		return
@@ -167,7 +167,7 @@ func (handler *RefreshHandler) handleUseCaseError(
 			writer,
 			http.StatusGatewayTimeout,
 			"request_timeout",
-			"The request could not be completed in time.",
+			"Não foi possível concluir a solicitação a tempo. Tente novamente.",
 		)
 
 	default:
@@ -184,7 +184,7 @@ func (handler *RefreshHandler) handleUseCaseError(
 			writer,
 			http.StatusInternalServerError,
 			"internal_error",
-			"An internal error occurred.",
+			"Não foi possível concluir a solicitação. Tente novamente mais tarde.",
 		)
 	}
 }
@@ -203,7 +203,7 @@ func (handler *RefreshHandler) respondInvalidRefresh(
 		writer,
 		http.StatusUnauthorized,
 		"invalid_refresh_token",
-		"The authentication session is no longer valid.",
+		"Sua sessão expirou. Entre novamente para continuar.",
 	)
 }
 

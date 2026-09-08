@@ -84,7 +84,7 @@ func (handler *SigninHandler) ServeHTTP(
 			writer,
 			http.StatusMethodNotAllowed,
 			"method_not_allowed",
-			"The requested method is not allowed.",
+			"Esta ação não está disponível.",
 		)
 
 		return
@@ -144,7 +144,7 @@ func (handler *SigninHandler) ServeHTTP(
 			writer,
 			http.StatusInternalServerError,
 			"internal_error",
-			"An internal error occurred.",
+			"Não foi possível concluir a solicitação. Tente novamente mais tarde.",
 		)
 
 		return
@@ -178,7 +178,7 @@ func (handler *SigninHandler) handleUseCaseError(
 			writer,
 			http.StatusUnauthorized,
 			"invalid_credentials",
-			"Email or password is incorrect.",
+			"E-mail ou senha incorretos.",
 		)
 
 	case errors.Is(err, context.Canceled):
@@ -190,7 +190,7 @@ func (handler *SigninHandler) handleUseCaseError(
 			writer,
 			http.StatusGatewayTimeout,
 			"request_timeout",
-			"The request could not be completed in time.",
+			"Não foi possível concluir a solicitação a tempo. Tente novamente.",
 		)
 
 	default:
@@ -207,7 +207,7 @@ func (handler *SigninHandler) handleUseCaseError(
 			writer,
 			http.StatusInternalServerError,
 			"internal_error",
-			"An internal error occurred.",
+			"Não foi possível concluir a solicitação. Tente novamente mais tarde.",
 		)
 	}
 }

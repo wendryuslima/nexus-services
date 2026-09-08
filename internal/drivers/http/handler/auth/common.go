@@ -19,16 +19,16 @@ func writeNoContent(writer http.ResponseWriter) {
 func handleJSONRequestError(logger *slog.Logger, writer http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, request.ErrUnsupportedMediaType):
-		writePublicError(logger, writer, http.StatusUnsupportedMediaType, "unsupported_media_type", "Content-Type must be application/json.")
+		writePublicError(logger, writer, http.StatusUnsupportedMediaType, "unsupported_media_type", "O formato dos dados enviados não é aceito.")
 	case errors.Is(err, request.ErrBodyTooLarge):
-		writePublicError(logger, writer, http.StatusRequestEntityTooLarge, "request_body_too_large", "The request body is too large.")
+		writePublicError(logger, writer, http.StatusRequestEntityTooLarge, "request_body_too_large", "Os dados enviados excedem o tamanho permitido.")
 	default:
 		writePublicError(
 			logger,
 			writer,
 			http.StatusBadRequest,
 			"invalid_request",
-			"The request body is invalid",
+			"Não foi possível processar os dados enviados. Verifique as informações e tente novamente.",
 		)
 	}
 }

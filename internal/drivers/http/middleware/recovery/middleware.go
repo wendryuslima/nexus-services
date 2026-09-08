@@ -55,7 +55,7 @@ func (middleware *Middleware) Wrap(next http.Handler) (http.Handler, error) {
 				trackedWriter,
 				http.StatusInternalServerError,
 				"internal_server_error",
-				"an unexpected error occurred",
+				"Não foi possível concluir a solicitação. Tente novamente mais tarde.",
 			)
 			if err != nil {
 				middleware.logger.ErrorContext(

@@ -44,7 +44,7 @@ Todas as respostas de erro seguem este formato:
 {
   "error": {
     "code": "invalid_credentials",
-    "message": "Email or password is incorrect."
+    "message": "E-mail ou senha incorretos."
   }
 }
 ```
@@ -158,7 +158,7 @@ Não há corpo JSON. A resposta contém novos headers `Set-Cookie` para access e
 {
   "error": {
     "code": "invalid_refresh_token",
-    "message": "The authentication session is no longer valid."
+    "message": "Sua sessão expirou. Entre novamente para continuar."
   }
 }
 ```
@@ -210,7 +210,7 @@ Uma rota inexistente retorna:
 {
   "error": {
     "code": "route_not_found",
-    "message": "The requested route does not exist."
+    "message": "A página solicitada não foi encontrada."
   }
 }
 ```

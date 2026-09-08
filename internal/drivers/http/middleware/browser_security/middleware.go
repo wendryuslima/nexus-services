@@ -183,7 +183,7 @@ func (middleware *Middleware) denyCrossOriginRequest(
 }
 
 func (middleware *Middleware) writeForbidden(writer http.ResponseWriter) {
-	if err := response.WriteError(writer, http.StatusForbidden, "cross_origin_request_rejected", "The request origin is not allowed."); err != nil {
+	if err := response.WriteError(writer, http.StatusForbidden, "cross_origin_request_rejected", "Não foi possível realizar esta solicitação."); err != nil {
 		middleware.logger.Error("failed to write cross-origin rejection", slog.Any("error", err))
 	}
 }
