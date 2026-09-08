@@ -14,8 +14,8 @@ import (
 
 const (
 	maximumPreflightMaxAge = 24 * time.Hour
-	allowedMethodHeader    = "POST"
-	allowedMethodsHeader   = "Content-Type"
+	allowedMethodsHeader   = "POST"
+	allowedHeadersHeader   = "Content-Type"
 )
 
 type Config struct {
@@ -153,7 +153,7 @@ func (middleware *Middleware) handlePreflight(writer http.ResponseWriter, httpRe
 		"Access-Control-Allow-Methods",
 		allowedMethodsHeader,
 	)
-	writer.Header().Set("Access-Control-Allow-Header", allowedMethodHeader)
+	writer.Header().Set("Access-Control-Allow-Headers", allowedHeadersHeader)
 	writer.Header().Set("Access-Control-Max-Age", strconv.Itoa(middleware.preflightMaxAge))
 	writer.Header().Set("Cache-Control", "no-store")
 
@@ -240,7 +240,7 @@ func normalizeOrigin(rawOrigin string) (string, error) {
 
 func setCredentialedCORSHeaders(header http.Header, origin string) {
 	header.Set("Access-Control-Allow-Origin", origin)
-	header.Set("Access-Control-Allow-Origin", "true")
+	header.Set("Access-Control-Allow-Credentials", "true")
 }
 
 func addVaryHeaders(header http.Header) {
