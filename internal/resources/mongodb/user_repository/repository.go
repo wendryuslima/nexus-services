@@ -158,6 +158,39 @@ func (repository *Repository) FindByID(
 	return account, nil
 }
 
+func (repository *Repository) FindAll(ctx context.Context) ([]*user.User, error) {
+	cursor, err := repository.collection.Find(ctx, bson.D{}, options.Find().SetSort(bson.D{
+		{Key: "created_at", Value: 1},
+		{Key: "_id", Value: 1},
+	}))
+	if err != nil {
+		return nil, fmt.Errorf("find all user documents: %w", err)
+	}
+
+	defer cursor.Close(ctx)
+
+	accounts := make([]*user.User, 0)
+	for cursor.Next(ctx) {
+		var document userDocument
+
+		if err := cursor.Decode(&document); err != nil {
+			return nil, fmt.Errorf("decode user document: %w", err)
+		}
+		account, err := document.toDomain()
+		if err != nil {
+			return nil, fmt.Errorf("convert user document to domain: %w", err)
+		}
+		accounts = append(accounts, account)
+	}
+
+	if err := cursor.Err(); err != nil {
+		return nil, fmt.Errorf("iterate over user documents: %w", err)
+
+	}
+
+	return accounts, nil
+}
+
 func isEmailDuplicateError(err error) bool {
 	if !mongo.IsDuplicateKeyError(err) {
 		return false

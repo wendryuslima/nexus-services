@@ -8,4 +8,5 @@ var (
 	ErrInvalidCredentials    = errors.New("invalid credentials")
 	ErrInvalidRefreshToken   = errors.New("invalid refresh token")
 	ErrInvalidConfiguration  = errors.New("invalid use case configuration")
+	ErrUnauthenticated       = errors.New("unauthenticated")
 )

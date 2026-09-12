@@ -8,8 +8,7 @@ import (
 
 type UserRepository interface {
 	Create(ctx context.Context, account *user.User) error
-
 	FindByEmail(ctx context.Context, email user.Email) (*user.User, error)
-
 	FindByID(ctx context.Context, id user.ID) (*user.User, error)
+	FindAll(ctx context.Context) ([]*user.User, error)
 }

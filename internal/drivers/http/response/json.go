@@ -34,7 +34,7 @@ func WriteJSON(writer http.ResponseWriter, status int, payload any) error {
 
 	writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 	writer.Header().Set("X-Content-Type-Options", "nosniff")
-	writer.Header().Set("Cacho-control", "no-store")
+	writer.Header().Set("Cache-control", "no-store")
 
 	writer.WriteHeader(status)
 	if _, err := writer.Write(body); err != nil {
