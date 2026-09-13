@@ -47,7 +47,7 @@ func (useCase *LogoutUseCase) Execute(ctx context.Context, input LogoutInput) er
 		return nil
 	}
 
-	claims, err := useCase.tokenManager.VerifyAccessToken(ctx, input.RefreshToken)
+	claims, err := useCase.tokenManager.VerifyRefreshToken(ctx, input.RefreshToken)
 	if err != nil {
 		if errors.Is(err, ports.ErrInvalidToken) ||
 			errors.Is(err, ports.ErrExpiredToken) {

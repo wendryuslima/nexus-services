@@ -48,7 +48,7 @@ func (handler *ListHandler) ServeHTTP(writer http.ResponseWriter, httpRequest *h
 	if httpRequest.Method != http.MethodGet {
 		writer.Header().Set("Allow", http.MethodGet)
 
-		handler.writePublicError(writer, http.StatusMethodNotAllowed, "method_not_allowed", "Esta ação não está disponível")
+		handler.writePublicError(writer, http.StatusMethodNotAllowed, "method_not_allowed", "Esta ação não está disponível.")
 		return
 	}
 
@@ -75,10 +75,10 @@ func (handler *ListHandler) handleUseCaseError(writer http.ResponseWriter, httpR
 	case errors.Is(err, context.Canceled):
 		return
 	case errors.Is(err, context.DeadlineExceeded):
-		handler.writePublicError(writer, http.StatusGatewayTimeout, "request_timeout", "Não foi possível concluir a solicitação a tempo. Tente novamente")
+		handler.writePublicError(writer, http.StatusGatewayTimeout, "request_timeout", "Não foi possível concluir a solicitação a tempo. Tente novamente.")
 	default:
 		handler.logger.ErrorContext(httpRequest.Context(), "list users use case failed", slog.Any("error", err), slog.String("method", httpRequest.Method), slog.String("route", "/v1/users"))
-		handler.writePublicError(writer, http.StatusInternalServerError, "internal_error", "Não foi possível conclur a solicitação. Tente novamente mais tarde")
+		handler.writePublicError(writer, http.StatusInternalServerError, "internal_error", "Não foi possível concluir a solicitação. Tente novamente mais tarde.")
 	}
 
 }

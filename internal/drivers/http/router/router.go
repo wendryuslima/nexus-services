@@ -15,6 +15,7 @@ const (
 	signinPath  = "/v1/auth/signin"
 	refreshPath = "/v1/auth/refresh"
 	logoutPath  = "/v1/auth/logout"
+	usersPath   = "/v1/users"
 )
 
 var _ http.Handler = (*Router)(nil)
@@ -26,7 +27,14 @@ type AuthHandlers struct {
 	Logout  http.Handler
 }
 
+type UsersHandlers struct {
+	List http.Handler
+}
 type BrowserSecurity interface {
+	Wrap(next http.Handler) (http.Handler, error)
+}
+
+type Authentication interface {
 	Wrap(next http.Handler) (http.Handler, error)
 }
 
@@ -36,15 +44,23 @@ type Router struct {
 
 func New(
 	authHandlers AuthHandlers,
+	userHandlers UsersHandlers,
 	browserSecurity BrowserSecurity,
+	authentication Authentication,
 	logger *slog.Logger,
 ) (*Router, error) {
 	if err := validateAuthHandlers(authHandlers); err != nil {
 		return nil, err
 	}
+	if err := validateUsersHandlers(userHandlers); err != nil {
+		return nil, err
+	}
 
 	if browserSecurity == nil {
 		return nil, ErrNilBrowserSecurity
+	}
+	if authentication == nil {
+		return nil, ErrNilAuthentication
 	}
 
 	if logger == nil {
@@ -84,7 +100,29 @@ func New(
 		)
 	}
 
+	authenticatedUsersHandler, err := authentication.Wrap(
+		userHandlers.List,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"wrap users handler with authentication: %w",
+			err,
+		)
+	}
+
+	protectedUsersHandler, err := browserSecurity.Wrap(
+		authenticatedUsersHandler,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"wrap users handler with browser security: %w",
+			err,
+		)
+	}
+
 	rootRouter := http.NewServeMux()
+
+	rootRouter.Handle(usersPath, protectedUsersHandler)
 
 	rootRouter.Handle(
 		authPrefix,
@@ -145,6 +183,14 @@ func validateAuthHandlers(
 			"%w: logout",
 			ErrNilAuthHandler,
 		)
+	}
+
+	return nil
+}
+
+func validateUsersHandlers(handlers UsersHandlers) error {
+	if handlers.List == nil {
+		return fmt.Errorf("%w: list", ErrNilUserHandler)
 	}
 
 	return nil

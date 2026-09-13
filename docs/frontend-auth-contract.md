@@ -217,14 +217,12 @@ Uma rota inexistente retorna:
 
 Origens permitidas são definidas pelo backend em `HTTP_ALLOWED_ORIGINS` e precisam coincidir exatamente com a origem do frontend, por exemplo `http://localhost:5173`.
 
-> **Atenção — bloqueador atual para frontend em outra origem:** o middleware CORS atual possui nomes/valores de headers incorretos. Ele sobrescreve `Access-Control-Allow-Origin` com `true`, não envia `Access-Control-Allow-Credentials: true`, e usa `Access-Control-Allow-Header` no singular. Enquanto isso não for corrigido, chamadas com `credentials: "include"` entre origens diferentes serão bloqueadas pelo navegador. Chamadas same-origin não dependem de CORS.
-
-O contrato CORS esperado após a correção é:
+O contrato CORS para uma origem permitida é:
 
 ```http
 Access-Control-Allow-Origin: http://localhost:5173
 Access-Control-Allow-Credentials: true
-Access-Control-Allow-Methods: POST
+Access-Control-Allow-Methods: GET, POST
 Access-Control-Allow-Headers: Content-Type
 ```
 

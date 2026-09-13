@@ -14,7 +14,7 @@ import (
 
 const (
 	maximumPreflightMaxAge = 24 * time.Hour
-	allowedMethodsHeader   = "POST"
+	allowedMethodsHeader   = "GET, POST"
 	allowedHeadersHeader   = "Content-Type"
 )
 
@@ -28,6 +28,15 @@ type Middleware struct {
 	preflightMaxAge int
 	csfrProtection  *http.CrossOriginProtection
 	logger          *slog.Logger
+}
+
+func requestedMethodAllowed(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodPost:
+		return true
+	default:
+		return false
+	}
 }
 
 func New(config Config, logger *slog.Logger) (*Middleware, error) {
@@ -143,7 +152,7 @@ func (middleware *Middleware) isPreflight(
 func (middleware *Middleware) handlePreflight(writer http.ResponseWriter, httpRequest *http.Request, origin string, originAllowed bool) {
 	requestedMethod := strings.ToUpper(strings.TrimSpace(httpRequest.Header.Get("Access-Control-Request-Method")))
 	requestHeaders := httpRequest.Header.Get("Access-Control-Request-Headers")
-	if !originAllowed || requestedMethod != http.MethodPost || !requestedHeaderAllowed(requestHeaders) {
+	if !originAllowed || !requestedMethodAllowed(requestedMethod) || !requestedHeaderAllowed(requestHeaders) {
 		middleware.logger.WarnContext(httpRequest.Context(), "CORS preflight  rejected", slog.String("origin", origin), slog.String("requested_method", requestedMethod), slog.String("path", httpRequest.URL.Path))
 		middleware.writeForbidden(writer)
 		return

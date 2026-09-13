@@ -10,8 +10,11 @@ import (
 	"time"
 
 	applicationauth "github.com/wendryuslima/nexus-services/internal/application/auth"
+	applicationusers "github.com/wendryuslima/nexus-services/internal/application/users"
 	authcookie "github.com/wendryuslima/nexus-services/internal/drivers/http/auth_cookie"
 	authhandler "github.com/wendryuslima/nexus-services/internal/drivers/http/handler/auth"
+	usershandler "github.com/wendryuslima/nexus-services/internal/drivers/http/handler/users"
+	authenticationmiddleware "github.com/wendryuslima/nexus-services/internal/drivers/http/middleware/authentication"
 	browsersecurity "github.com/wendryuslima/nexus-services/internal/drivers/http/middleware/browser_security"
 	recoverymiddleware "github.com/wendryuslima/nexus-services/internal/drivers/http/middleware/recovery"
 	httprouter "github.com/wendryuslima/nexus-services/internal/drivers/http/router"
@@ -127,6 +130,30 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 		return fmt.Errorf("create logout use case: %w", err)
 	}
 
+	listUsersUseCase, err := applicationusers.NewListUseCase(
+		users,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"create list users use case: %w",
+			err,
+		)
+	}
+
+	authenticateUseCase, err := applicationauth.NewAuthenticateUseCase(
+		applicationauth.AuthenticateDependencies{
+			SessionRepository: sessions,
+			TokenManager:      tokenManager,
+			Clock:             appClock,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"create authenticate use case: %w",
+			err,
+		)
+	}
+
 	cookies, err := authcookie.NewManager(authCookieConfig(configs.auth.Cookies), appClock)
 	if err != nil {
 		return fmt.Errorf("create authentication cookie manager: %w", err)
@@ -147,6 +174,10 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("create logout handler: %w", err)
 	}
+	listUsersHandler, err := usershandler.NewListHandler(listUsersUseCase, logger)
+	if err != nil {
+		return fmt.Errorf("create list users handler: %w", err)
+	}
 
 	browserMiddleware, err := browsersecurity.New(browsersecurity.Config{
 		AllowedOrigins: configs.allowedOrigins, PreflightMaxAge: corsPreflightMaxAge,
@@ -154,11 +185,31 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("create browser security middleware: %w", err)
 	}
-	router, err := httprouter.New(httprouter.AuthHandlers{
-		Signup: signupHandler, Signin: signinHandler, Refresh: refreshHandler, Logout: logoutHandler,
-	}, browserMiddleware, logger)
+	authenticationMiddleware, err := authenticationmiddleware.New(
+		authenticateUseCase, cookies, logger,
+	)
 	if err != nil {
-		return fmt.Errorf("create HTTP router: %w", err)
+		return fmt.Errorf("create authentication middleware: %w", err)
+	}
+	router, err := httprouter.New(
+		httprouter.AuthHandlers{
+			Signup:  signupHandler,
+			Signin:  signinHandler,
+			Refresh: refreshHandler,
+			Logout:  logoutHandler,
+		},
+		httprouter.UsersHandlers{
+			List: listUsersHandler,
+		},
+		browserMiddleware,
+		authenticationMiddleware,
+		logger,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"create HTTP router: %w",
+			err,
+		)
 	}
 	recoveryMiddleware, err := recoverymiddleware.New(logger)
 	if err != nil {
