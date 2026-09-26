@@ -8,4 +8,5 @@ var (
 	ErrNilLogger          = errors.New("router logger cannot be nil")
 	ErrNilUserHandler     = errors.New("user HTTP handler cannot be nil")
 	ErrNilAuthentication  = errors.New("authentication middleware cannot be nil")
+	ErrNilChatHandler     = errors.New("chat HTTP handler cannot be nil")
 )

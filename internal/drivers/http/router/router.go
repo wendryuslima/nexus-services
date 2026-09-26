@@ -11,11 +11,14 @@ import (
 const (
 	authPrefix = "/v1/auth/"
 
-	signupPath  = "/v1/auth/signup"
-	signinPath  = "/v1/auth/signin"
-	refreshPath = "/v1/auth/refresh"
-	logoutPath  = "/v1/auth/logout"
-	usersPath   = "/v1/users"
+	signupPath      = "/v1/auth/signup"
+	signinPath      = "/v1/auth/signin"
+	refreshPath     = "/v1/auth/refresh"
+	logoutPath      = "/v1/auth/logout"
+	usersPath       = "/v1/users"
+	chatsPrefix     = "/v1/chats/"
+	chatsPath       = "/v1/chats"
+	directChatsPath = "/v1/chats/direct"
 )
 
 var _ http.Handler = (*Router)(nil)
@@ -30,6 +33,12 @@ type AuthHandlers struct {
 type UsersHandlers struct {
 	List http.Handler
 }
+
+type ChatsHandlers struct {
+	List         http.Handler
+	CreateDirect http.Handler
+}
+
 type BrowserSecurity interface {
 	Wrap(next http.Handler) (http.Handler, error)
 }
@@ -42,9 +51,20 @@ type Router struct {
 	handler http.Handler
 }
 
+func validateChatsHandlers(handlers ChatsHandlers) error {
+	if handlers.List == nil {
+		return fmt.Errorf("%w: list", ErrNilChatHandler)
+	}
+	if handlers.CreateDirect == nil {
+		return fmt.Errorf("%w: create direct", ErrNilChatHandler)
+	}
+	return nil
+}
+
 func New(
 	authHandlers AuthHandlers,
 	userHandlers UsersHandlers,
+	chatHandlers ChatsHandlers,
 	browserSecurity BrowserSecurity,
 	authentication Authentication,
 	logger *slog.Logger,
@@ -53,6 +73,9 @@ func New(
 		return nil, err
 	}
 	if err := validateUsersHandlers(userHandlers); err != nil {
+		return nil, err
+	}
+	if err := validateChatsHandlers(chatHandlers); err != nil {
 		return nil, err
 	}
 
@@ -120,6 +143,20 @@ func New(
 		)
 	}
 
+	chatsRouter := http.NewServeMux()
+	chatsRouter.Handle(chatsPath, chatHandlers.List)
+	chatsRouter.Handle(directChatsPath, chatHandlers.CreateDirect)
+	chatsRouter.Handle("/", notFoundHandler)
+
+	authenticatedChatsHandler, err := authentication.Wrap(chatsRouter)
+	if err != nil {
+		return nil, fmt.Errorf("wrap chats router with authentication: %w", err)
+	}
+	protectedChatsHandler, err := browserSecurity.Wrap(authenticatedChatsHandler)
+	if err != nil {
+		return nil, fmt.Errorf("wrap chats router with browser security: %w", err)
+	}
+
 	rootRouter := http.NewServeMux()
 
 	rootRouter.Handle(usersPath, protectedUsersHandler)
@@ -128,6 +165,9 @@ func New(
 		authPrefix,
 		protectedAuthRouter,
 	)
+
+	rootRouter.Handle(chatsPath, protectedChatsHandler)
+	rootRouter.Handle(chatsPrefix, protectedChatsHandler)
 
 	rootRouter.Handle(
 		"/v1/auth",

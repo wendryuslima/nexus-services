@@ -10,9 +10,11 @@ import (
 	"time"
 
 	applicationauth "github.com/wendryuslima/nexus-services/internal/application/auth"
+	applicationchats "github.com/wendryuslima/nexus-services/internal/application/chats"
 	applicationusers "github.com/wendryuslima/nexus-services/internal/application/users"
 	authcookie "github.com/wendryuslima/nexus-services/internal/drivers/http/auth_cookie"
 	authhandler "github.com/wendryuslima/nexus-services/internal/drivers/http/handler/auth"
+	chatshandler "github.com/wendryuslima/nexus-services/internal/drivers/http/handler/chats"
 	usershandler "github.com/wendryuslima/nexus-services/internal/drivers/http/handler/users"
 	authenticationmiddleware "github.com/wendryuslima/nexus-services/internal/drivers/http/middleware/authentication"
 	browsersecurity "github.com/wendryuslima/nexus-services/internal/drivers/http/middleware/browser_security"
@@ -23,6 +25,7 @@ import (
 	"github.com/wendryuslima/nexus-services/internal/resources/config"
 	"github.com/wendryuslima/nexus-services/internal/resources/identifier"
 	"github.com/wendryuslima/nexus-services/internal/resources/mongodb"
+	chatrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/chat_repository"
 	sessionrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/session_repository"
 	userrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/user_repository"
 	"github.com/wendryuslima/nexus-services/internal/resources/security/argon2id"
@@ -35,6 +38,7 @@ const (
 	corsPreflightMaxAge     = 10 * time.Minute
 	usersCollectionName     = "users"
 	sessionsCollectionName  = "sessions"
+	chatsCollectionName     = "chats"
 )
 
 func run(ctx context.Context, logger *slog.Logger) (runErr error) {
@@ -65,6 +69,13 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("get sessions collection: %w", err)
 	}
+	chatsCollection, err := mongoClient.Collection(chatsCollectionName)
+	if err != nil {
+		return fmt.Errorf(
+			"get chats collection: %w",
+			err,
+		)
+	}
 
 	users, err := userrepository.NewRepository(usersCollection)
 	if err != nil {
@@ -75,11 +86,25 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 		return fmt.Errorf("create session repository: %w", err)
 	}
 
+	chats, err := chatrepository.NewRepository(chatsCollection)
+	if err != nil {
+		return fmt.Errorf(
+			"create chat repository: %w",
+			err,
+		)
+	}
+
 	if err := users.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("ensure user indexes: %w", err)
 	}
 	if err := sessions.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("ensure session indexes: %w", err)
+	}
+	if err := chats.EnsureIndexes(ctx); err != nil {
+		return fmt.Errorf(
+			"ensure chat indexes: %w",
+			err,
+		)
 	}
 
 	appClock := clock.NewSystemClock()
@@ -139,6 +164,25 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 			err,
 		)
 	}
+	createDirectChatUseCase, err :=
+		applicationchats.NewCreateDirectUseCase(
+			applicationchats.CreateDirectDependencies{
+				ChatRepository: chats,
+				UserRepository: users,
+				IDGenerator:    ids,
+				Clock:          appClock,
+			},
+		)
+	if err != nil {
+		return fmt.Errorf("create direct chat use case: %w", err)
+	}
+	listChatsUseCase, err := applicationchats.NewListUseCase(chats)
+	if err != nil {
+		return fmt.Errorf(
+			"create list chats use case: %w",
+			err,
+		)
+	}
 
 	authenticateUseCase, err := applicationauth.NewAuthenticateUseCase(
 		applicationauth.AuthenticateDependencies{
@@ -178,6 +222,20 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("create list users handler: %w", err)
 	}
+	createDirectChatHandler, err := chatshandler.NewCreateDirectHandler(createDirectChatUseCase, logger)
+	if err != nil {
+		return fmt.Errorf(
+			"create direct chat handler: %w",
+			err,
+		)
+	}
+	listChatsHandler, err := chatshandler.NewListHandler(listChatsUseCase, logger)
+	if err != nil {
+		return fmt.Errorf(
+			"create list chats handler: %w",
+			err,
+		)
+	}
 
 	browserMiddleware, err := browsersecurity.New(browsersecurity.Config{
 		AllowedOrigins: configs.allowedOrigins, PreflightMaxAge: corsPreflightMaxAge,
@@ -201,10 +259,15 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 		httprouter.UsersHandlers{
 			List: listUsersHandler,
 		},
+		httprouter.ChatsHandlers{
+			List:         listChatsHandler,
+			CreateDirect: createDirectChatHandler,
+		},
 		browserMiddleware,
 		authenticationMiddleware,
 		logger,
 	)
+
 	if err != nil {
 		return fmt.Errorf(
 			"create HTTP router: %w",
