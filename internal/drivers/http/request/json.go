@@ -63,6 +63,10 @@ func DecodeJSON(writen http.ResponseWriter, httpRequest *http.Request, destinati
 }
 
 func classifyDecodeError(err error) error {
+	var maxBytesError *http.MaxBytesError
+	if errors.As(err, &maxBytesError) {
+		return ErrBodyTooLarge
+	}
 	if errors.Is(err, io.EOF) {
 		return ErrEmptyBody
 	}

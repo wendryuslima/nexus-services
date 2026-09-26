@@ -38,13 +38,7 @@ func handleJSONRequestError(logger *slog.Logger, writer http.ResponseWriter, err
 			"invalid_request",
 			"Não foi possível processar os dados enviados.",
 		)
-		writePublicError(
-			logger,
-			writer,
-			http.StatusBadRequest,
-			"invalid_request",
-			"Não foi possível processar os dados enviados.",
-		)
+
 	}
 }
 
