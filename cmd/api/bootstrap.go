@@ -11,6 +11,7 @@ import (
 
 	applicationauth "github.com/wendryuslima/nexus-services/internal/application/auth"
 	applicationchats "github.com/wendryuslima/nexus-services/internal/application/chats"
+	applicationtimeline "github.com/wendryuslima/nexus-services/internal/application/timeline"
 	applicationusers "github.com/wendryuslima/nexus-services/internal/application/users"
 	authcookie "github.com/wendryuslima/nexus-services/internal/drivers/http/auth_cookie"
 	authhandler "github.com/wendryuslima/nexus-services/internal/drivers/http/handler/auth"
@@ -27,6 +28,7 @@ import (
 	"github.com/wendryuslima/nexus-services/internal/resources/mongodb"
 	chatrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/chat_repository"
 	sessionrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/session_repository"
+	timelinerepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/timeline_repository"
 	userrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/user_repository"
 	"github.com/wendryuslima/nexus-services/internal/resources/security/argon2id"
 	"github.com/wendryuslima/nexus-services/internal/resources/security/jwtadapter"
@@ -39,6 +41,7 @@ const (
 	usersCollectionName     = "users"
 	sessionsCollectionName  = "sessions"
 	chatsCollectionName     = "chats"
+	timelineCollectionName  = "timeline_items"
 )
 
 func run(ctx context.Context, logger *slog.Logger) (runErr error) {
@@ -76,6 +79,10 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 			err,
 		)
 	}
+	timelineCollection, err := mongoClient.Collection(timelineCollectionName)
+	if err != nil {
+		return fmt.Errorf("get timeline collection: %w", err)
+	}
 
 	users, err := userrepository.NewRepository(usersCollection)
 	if err != nil {
@@ -93,6 +100,10 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 			err,
 		)
 	}
+	timelineItems, err := timelinerepository.NewRepository(timelineCollection)
+	if err != nil {
+		return fmt.Errorf("create timeline repository: %w", err)
+	}
 
 	if err := users.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("ensure user indexes: %w", err)
@@ -105,6 +116,9 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 			"ensure chat indexes: %w",
 			err,
 		)
+	}
+	if err := timelineItems.EnsureIndexes(ctx); err != nil {
+		return fmt.Errorf("ensure timeline indexes: %w", err)
 	}
 
 	appClock := clock.NewSystemClock()
@@ -183,6 +197,12 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 			err,
 		)
 	}
+	listTimelineUseCase, err := applicationtimeline.NewListUseCase(applicationtimeline.ListDependencies{
+		ChatRepository: chats, TimelineRepository: timelineItems,
+	})
+	if err != nil {
+		return fmt.Errorf("create list timeline use case: %w", err)
+	}
 
 	authenticateUseCase, err := applicationauth.NewAuthenticateUseCase(
 		applicationauth.AuthenticateDependencies{
@@ -236,6 +256,10 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 			err,
 		)
 	}
+	timelineHandler, err := chatshandler.NewTimelineHandler(listTimelineUseCase, logger)
+	if err != nil {
+		return fmt.Errorf("create timeline handler: %w", err)
+	}
 
 	browserMiddleware, err := browsersecurity.New(browsersecurity.Config{
 		AllowedOrigins: configs.allowedOrigins, PreflightMaxAge: corsPreflightMaxAge,
@@ -262,6 +286,7 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 		httprouter.ChatsHandlers{
 			List:         listChatsHandler,
 			CreateDirect: createDirectChatHandler,
+			Timeline:     timelineHandler,
 		},
 		browserMiddleware,
 		authenticationMiddleware,

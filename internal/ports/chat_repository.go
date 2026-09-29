@@ -28,5 +28,6 @@ type ListChatsResult struct {
 
 type ChatRepository interface {
 	GetOrCreateDirect(ctx context.Context, candidate *chat.Chat) (storedChat *chat.Chat, created bool, err error)
+	FindByID(ctx context.Context, chatID chat.ID) (*chat.Chat, error)
 	ListByParticipant(ctx context.Context, params ListChatsParams) (ListChatsResult, error)
 }

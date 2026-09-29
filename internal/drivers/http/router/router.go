@@ -37,6 +37,7 @@ type UsersHandlers struct {
 type ChatsHandlers struct {
 	List         http.Handler
 	CreateDirect http.Handler
+	Timeline     http.Handler
 }
 
 type BrowserSecurity interface {
@@ -57,6 +58,9 @@ func validateChatsHandlers(handlers ChatsHandlers) error {
 	}
 	if handlers.CreateDirect == nil {
 		return fmt.Errorf("%w: create direct", ErrNilChatHandler)
+	}
+	if handlers.Timeline == nil {
+		return fmt.Errorf("%w: timeline", ErrNilChatHandler)
 	}
 	return nil
 }
@@ -146,6 +150,7 @@ func New(
 	chatsRouter := http.NewServeMux()
 	chatsRouter.Handle(chatsPath, chatHandlers.List)
 	chatsRouter.Handle(directChatsPath, chatHandlers.CreateDirect)
+	chatsRouter.Handle(chatsPrefix, chatHandlers.Timeline)
 	chatsRouter.Handle("/", notFoundHandler)
 
 	authenticatedChatsHandler, err := authentication.Wrap(chatsRouter)

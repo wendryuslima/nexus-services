@@ -8,6 +8,7 @@ Este documento descreve o contrato público que o frontend deve usar para criar 
 | --- | --- | --- | --- |
 | Criar ou obter chat direto | `POST` | `/v1/chats/direct` | Obrigatória |
 | Listar chats do usuário | `GET` | `/v1/chats` | Obrigatória |
+| Listar timeline do chat | `GET` | `/v1/chats/:chatId/timeline` | Obrigatória |
 
 As duas rotas usam o access token armazenado em cookie `HttpOnly`. O frontend não deve ler nem enviar o JWT manualmente; deve permitir que o navegador envie os cookies com `credentials: "include"` ou `withCredentials: true`.
 
@@ -392,7 +393,6 @@ Este contrato ainda não define:
 
 - `GET /v1/chats/:chatId` para carregar um chat individual;
 - endpoints de mensagens;
-- timeline do chat;
 - envio, edição ou exclusão de mensagens;
 - atualizações em tempo real.
 

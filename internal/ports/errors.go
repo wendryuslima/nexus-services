@@ -9,4 +9,5 @@ var (
 	ErrSessionConflict    = errors.New("session updated conflict")
 	ErrInvalidToken       = errors.New("invalid token")
 	ErrExpiredToken       = errors.New("token expired")
+	ErrChatNotFound       = errors.New("chat not found")
 )

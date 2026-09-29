@@ -9,4 +9,5 @@ var (
 	ErrInvalidListParticipant = errors.New("chat list participant cannot be empty")
 	ErrInvalidListLimit       = errors.New("chat list limit must be greater than zero")
 	ErrInvalidListCursor      = errors.New("chat list cursor is invalid")
+	ErrInvalidChatID          = errors.New("chat id cannot be empty")
 )
