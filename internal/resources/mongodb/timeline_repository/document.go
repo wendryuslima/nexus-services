@@ -15,13 +15,15 @@ type messageContentDocument struct {
 }
 
 type messageDocument struct {
-	SenderID string                 `bson:"sender_id"`
-	Content  messageContentDocument `bson:"content"`
+	ClientMessageID string                 `bson:"client_message_id"`
+	SenderID        string                 `bson:"sender_id"`
+	Content         messageContentDocument `bson:"content"`
 }
 
 type timelineItemDocument struct {
 	ID        string          `bson:"_id"`
 	ChatID    string          `bson:"chat_id"`
+	Sequence  int64           `bson:"sequence"`
 	Kind      string          `bson:"kind"`
 	CreatedAt time.Time       `bson:"created_at"`
 	UpdatedAt time.Time       `bson:"updated_at"`
@@ -31,35 +33,111 @@ type timelineItemDocument struct {
 func (document timelineItemDocument) toDomain() (*timeline.Item, error) {
 	itemID, err := timeline.ParseID(document.ID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: parse item id: %v", ErrInvalidDocument, err)
+		return nil, fmt.Errorf(
+			"%w: parse item id: %v",
+			ErrInvalidDocument,
+			err,
+		)
 	}
+
 	chatID, err := chat.ParseID(document.ChatID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: parse chat id: %v", ErrInvalidDocument, err)
+		return nil, fmt.Errorf(
+			"%w: parse chat id: %v",
+			ErrInvalidDocument,
+			err,
+		)
 	}
+
+	sequence, err := timeline.ParseSequence(document.Sequence)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%w: parse sequence: %v",
+			ErrInvalidDocument,
+			err,
+		)
+	}
+
 	kind, err := timeline.ParseKind(document.Kind)
 	if err != nil || kind != timeline.KindMessage {
-		return nil, fmt.Errorf("%w: unsupported kind %q", ErrInvalidDocument, document.Kind)
+		return nil, fmt.Errorf(
+			"%w: unsupported kind %q",
+			ErrInvalidDocument,
+			document.Kind,
+		)
 	}
+
+	clientMessageID, err := timeline.ParseClientMessageID(
+		document.Message.ClientMessageID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%w: parse client message id: %v",
+			ErrInvalidDocument,
+			err,
+		)
+	}
+
 	senderID, err := user.ParseID(document.Message.SenderID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: parse sender id: %v", ErrInvalidDocument, err)
+		return nil, fmt.Errorf(
+			"%w: parse sender id: %v",
+			ErrInvalidDocument,
+			err,
+		)
 	}
-	contentType, err := timeline.ParseContentType(document.Message.Content.Type)
+
+	contentType, err := timeline.ParseContentType(
+		document.Message.Content.Type,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("%w: parse content type: %v", ErrInvalidDocument, err)
+		return nil, fmt.Errorf(
+			"%w: parse content type: %v",
+			ErrInvalidDocument,
+			err,
+		)
 	}
-	content, err := timeline.NewMessageContent(contentType, document.Message.Content.Value)
+
+	content, err := timeline.NewMessageContent(
+		contentType,
+		document.Message.Content.Value,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("%w: restore content: %v", ErrInvalidDocument, err)
+		return nil, fmt.Errorf(
+			"%w: restore content: %v",
+			ErrInvalidDocument,
+			err,
+		)
 	}
-	message, err := timeline.NewMessage(senderID, content)
+
+	message, err := timeline.NewMessage(
+		clientMessageID,
+		senderID,
+		content,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("%w: restore message: %v", ErrInvalidDocument, err)
+		return nil, fmt.Errorf(
+			"%w: restore message: %v",
+			ErrInvalidDocument,
+			err,
+		)
 	}
-	item, err := timeline.RestoreMessage(itemID, chatID, document.CreatedAt, document.UpdatedAt, message)
+
+	item, err := timeline.RestoreMessage(
+		itemID,
+		chatID,
+		sequence,
+		document.CreatedAt,
+		document.UpdatedAt,
+		message,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("%w: restore item: %v", ErrInvalidDocument, err)
+		return nil, fmt.Errorf(
+			"%w: restore item: %v",
+			ErrInvalidDocument,
+			err,
+		)
 	}
+
 	return item, nil
 }

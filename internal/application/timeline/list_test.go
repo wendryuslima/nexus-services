@@ -50,9 +50,27 @@ func TestListUseCaseCalculatesIsMineForCurrentUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create chat: %v", err)
 	}
+	first := mustMessageItem(
+		t,
+		"item-1",
+		"018f92d4-2c47-7c87-b33e-d2ea331d2ff1",
+		1,
+		chatID,
+		otherUserID,
+		"Bom dia!",
+		now,
+	)
 
-	first := mustMessageItem(t, "item-1", chatID, otherUserID, "Bom dia!", now)
-	second := mustMessageItem(t, "item-2", chatID, currentUserID, "Estou bem.", now.Add(time.Minute))
+	second := mustMessageItem(
+		t,
+		"item-2",
+		"018f92d4-2c47-7c87-b33e-d2ea331d2ff2",
+		2,
+		chatID,
+		currentUserID,
+		"Estou bem.",
+		now.Add(time.Minute),
+	)
 	nextItemID, _ := domaintimeline.ParseID("item-1")
 	timelineRepository := &timelineRepositoryStub{result: ports.ListTimelineResult{
 		Items: []*domaintimeline.Item{first, second}, HasNext: true,
@@ -132,14 +150,63 @@ func mustChatID(t *testing.T, value string) chat.ID {
 	return id
 }
 
-func mustMessageItem(t *testing.T, itemIDValue string, chatID chat.ID, senderID user.ID, value string, createdAt time.Time) *domaintimeline.Item {
+func mustMessageItem(
+	t *testing.T,
+	itemIDValue string,
+	clientMessageIDValue string,
+	sequenceValue int64,
+	chatID chat.ID,
+	senderID user.ID,
+	value string,
+	createdAt time.Time,
+) *domaintimeline.Item {
 	t.Helper()
-	itemID, _ := domaintimeline.ParseID(itemIDValue)
-	content, _ := domaintimeline.NewMessageContent(domaintimeline.ContentTypeText, value)
-	message, _ := domaintimeline.NewMessage(senderID, content)
-	item, err := domaintimeline.RestoreMessage(itemID, chatID, createdAt, createdAt, message)
+
+	itemID, err := domaintimeline.ParseID(itemIDValue)
+	if err != nil {
+		t.Fatalf("parse timeline item id: %v", err)
+	}
+
+	clientMessageID, err := domaintimeline.ParseClientMessageID(
+		clientMessageIDValue,
+	)
+	if err != nil {
+		t.Fatalf("parse client message id: %v", err)
+	}
+
+	sequence, err := domaintimeline.ParseSequence(sequenceValue)
+	if err != nil {
+		t.Fatalf("parse sequence: %v", err)
+	}
+
+	content, err := domaintimeline.NewMessageContent(
+		domaintimeline.ContentTypeText,
+		value,
+	)
+	if err != nil {
+		t.Fatalf("create message content: %v", err)
+	}
+
+	message, err := domaintimeline.NewMessage(
+		clientMessageID,
+		senderID,
+		content,
+	)
+	if err != nil {
+		t.Fatalf("create message: %v", err)
+	}
+
+	item, err := domaintimeline.RestoreMessage(
+		itemID,
+		chatID,
+		sequence,
+		createdAt,
+		createdAt,
+		message,
+	)
 	if err != nil {
 		t.Fatalf("restore timeline item: %v", err)
 	}
+
 	return item
 }
