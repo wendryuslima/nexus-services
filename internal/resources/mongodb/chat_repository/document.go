@@ -19,6 +19,7 @@ type chatDocument struct {
 	CreatedAt     time.Time `bson:"created_at"`
 	UpdatedAt     time.Time `bson:"updated_at"`
 	SummarySortAt time.Time `bson:"summary_sort_at"`
+	LastSequence  int64     `bson:"last_sequence"`
 }
 
 func newChatDocument(conversation *chat.Chat) (chatDocument, error) {
@@ -43,6 +44,7 @@ func newChatDocument(conversation *chat.Chat) (chatDocument, error) {
 		CreatedAt:     conversation.CreatedAt().UTC(),
 		UpdatedAt:     conversation.UpdatedAt().UTC(),
 		SummarySortAt: conversation.SummarySortAt().UTC(),
+		LastSequence:  0,
 	}, nil
 }
 
