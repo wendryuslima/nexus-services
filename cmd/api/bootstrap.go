@@ -190,7 +190,7 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("create direct chat use case: %w", err)
 	}
-	listChatsUseCase, err := applicationchats.NewListUseCase(chats)
+	listChatsUseCase, err := applicationchats.NewListUseCase(chats, users)
 	if err != nil {
 		return fmt.Errorf(
 			"create list chats use case: %w",

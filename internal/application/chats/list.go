@@ -29,11 +29,12 @@ type ListInput struct {
 }
 
 type ListedChat struct {
-	ID            string
-	RelatedUser   string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	SummarySortAt time.Time
+	ID               string
+	RelatedUser      string
+	RelatedUserEmail string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	SummarySortAt    time.Time
 }
 
 type ListCursorOutput struct {
@@ -57,16 +58,18 @@ type ListOutput struct {
 
 type ListUseCase struct {
 	chatRepository ports.ChatRepository
+	userRepository ports.UserRepository
 }
 
-func NewListUseCase(chatRepository ports.ChatRepository) (*ListUseCase, error) {
-	if chatRepository == nil {
+func NewListUseCase(chatRepository ports.ChatRepository, userRepository ports.UserRepository) (*ListUseCase, error) {
+	if chatRepository == nil || userRepository == nil {
 		return nil, fmt.Errorf("%w: chat repository",
 			ErrNilDependency)
 	}
 
 	return &ListUseCase{
 		chatRepository: chatRepository,
+		userRepository: userRepository,
 	}, nil
 }
 
@@ -102,6 +105,7 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 			err)
 	}
 	listedChats := make([]ListedChat, 0, len(result.Chats))
+	relatedIDs := make([]user.ID, 0, len(result.Chats))
 
 	for _, conversation := range result.Chats {
 		if conversation == nil {
@@ -120,6 +124,20 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 			UpdatedAt:     conversation.UpdatedAt(),
 			SummarySortAt: conversation.SummarySortAt(),
 		})
+		relatedIDs = append(relatedIDs, relatedUserID)
+	}
+	relatedUsers, err := useCase.userRepository.FindByIDs(ctx, relatedIDs)
+	if err != nil {
+		return ListOutput{}, fmt.Errorf("find chat participants: %w", err)
+	}
+	emailsByID := make(map[string]string, len(relatedUsers))
+	for _, account := range relatedUsers {
+		if account != nil {
+			emailsByID[account.ID().String()] = account.Email().String()
+		}
+	}
+	for index := range listedChats {
+		listedChats[index].RelatedUserEmail = emailsByID[listedChats[index].RelatedUser]
 	}
 	nextCursor, err := mapNextCursor(result)
 	if err != nil {

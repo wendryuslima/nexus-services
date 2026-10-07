@@ -37,8 +37,10 @@ func repositoryTestItem(t *testing.T, itemIDValue string, createdAt time.Time) *
 	chatID, _ := chat.ParseID("chat-1")
 	senderID, _ := user.ParseID("user-1")
 	content, _ := timeline.NewMessageContent(timeline.ContentTypeText, "message")
-	message, _ := timeline.NewMessage(senderID, content)
-	item, err := timeline.RestoreMessage(itemID, chatID, createdAt, createdAt, message)
+	clientMessageID, _ := timeline.ParseClientMessageID("00000000-0000-4000-8000-000000000001")
+	sequence, _ := timeline.ParseSequence(1)
+	message, _ := timeline.NewMessage(clientMessageID, senderID, content)
+	item, err := timeline.RestoreMessage(itemID, chatID, sequence, createdAt, createdAt, message)
 	if err != nil {
 		t.Fatalf("restore item: %v", err)
 	}

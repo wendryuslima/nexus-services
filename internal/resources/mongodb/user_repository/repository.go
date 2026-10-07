@@ -12,7 +12,10 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-const userEmailUniqueIndexName = "users_email_unique"
+const (
+	userEmailUniqueIndexName = "users_email_unique"
+	userListIndexName        = "users_created_at_id"
+)
 
 var _ ports.UserRepository = (*Repository)(nil)
 
@@ -35,20 +38,23 @@ func NewRepository(
 func (repository *Repository) EnsureIndexes(
 	ctx context.Context,
 ) error {
-	index := mongo.IndexModel{
+	indexes := []mongo.IndexModel{{
 		Keys: bson.D{
 			{Key: "email", Value: 1},
 		},
 		Options: options.Index().
 			SetName(userEmailUniqueIndexName).
 			SetUnique(true),
-	}
+	}, {
+		Keys:    bson.D{{Key: "created_at", Value: 1}, {Key: "_id", Value: 1}},
+		Options: options.Index().SetName(userListIndexName),
+	}}
 
 	if _, err := repository.collection.
 		Indexes().
-		CreateOne(ctx, index); err != nil {
+		CreateMany(ctx, indexes); err != nil {
 		return fmt.Errorf(
-			"create unique user email index: %w",
+			"create user indexes: %w",
 			err,
 		)
 	}
@@ -158,18 +164,23 @@ func (repository *Repository) FindByID(
 	return account, nil
 }
 
-func (repository *Repository) FindAll(ctx context.Context) ([]*user.User, error) {
-	cursor, err := repository.collection.Find(ctx, bson.D{}, options.Find().SetSort(bson.D{
-		{Key: "created_at", Value: 1},
-		{Key: "_id", Value: 1},
-	}))
-	if err != nil {
-		return nil, fmt.Errorf("find all user documents: %w", err)
+func (repository *Repository) FindByIDs(ctx context.Context, ids []user.ID) ([]*user.User, error) {
+	accounts := make([]*user.User, 0, len(ids))
+	if len(ids) == 0 {
+		return accounts, nil
 	}
-
+	values := make(bson.A, 0, len(ids))
+	for _, id := range ids {
+		if id.String() == "" {
+			return nil, user.ErrInvalidID
+		}
+		values = append(values, id.String())
+	}
+	cursor, err := repository.collection.Find(ctx, bson.D{{Key: "_id", Value: bson.D{{Key: "$in", Value: values}}}})
+	if err != nil {
+		return nil, fmt.Errorf("find user documents by ids: %w", err)
+	}
 	defer cursor.Close(ctx)
-
-	accounts := make([]*user.User, 0)
 	for cursor.Next(ctx) {
 		var document userDocument
 
@@ -189,6 +200,58 @@ func (repository *Repository) FindAll(ctx context.Context) ([]*user.User, error)
 	}
 
 	return accounts, nil
+}
+
+func (repository *Repository) List(ctx context.Context, params ports.ListUsersParams) (ports.ListUsersResult, error) {
+	if params.Limit < 1 || params.Limit > 100 {
+		return ports.ListUsersResult{}, fmt.Errorf("invalid user list limit")
+	}
+	filter := bson.D{}
+	if params.After != nil {
+		if params.After.ID.String() == "" || params.After.CreatedAt.IsZero() {
+			return ports.ListUsersResult{}, fmt.Errorf("invalid user list cursor")
+		}
+		filter = bson.D{{Key: "$or", Value: bson.A{
+			bson.D{{Key: "created_at", Value: bson.D{{Key: "$gt", Value: params.After.CreatedAt.UTC()}}}},
+			bson.D{{Key: "created_at", Value: params.After.CreatedAt.UTC()}, {Key: "_id", Value: bson.D{{Key: "$gt", Value: params.After.ID.String()}}}},
+		}}}
+	}
+	totalItems, err := repository.collection.CountDocuments(ctx, bson.D{})
+	if err != nil {
+		return ports.ListUsersResult{}, fmt.Errorf("count user documents: %w", err)
+	}
+	cursor, err := repository.collection.Find(ctx, filter, options.Find().
+		SetSort(bson.D{{Key: "created_at", Value: 1}, {Key: "_id", Value: 1}}).
+		SetLimit(int64(params.Limit+1)))
+	if err != nil {
+		return ports.ListUsersResult{}, fmt.Errorf("find user page: %w", err)
+	}
+	defer cursor.Close(ctx)
+	accounts := make([]*user.User, 0, params.Limit+1)
+	for cursor.Next(ctx) {
+		var document userDocument
+		if err := cursor.Decode(&document); err != nil {
+			return ports.ListUsersResult{}, fmt.Errorf("decode user page: %w", err)
+		}
+		account, err := document.toDomain()
+		if err != nil {
+			return ports.ListUsersResult{}, fmt.Errorf("convert user page: %w", err)
+		}
+		accounts = append(accounts, account)
+	}
+	if err := cursor.Err(); err != nil {
+		return ports.ListUsersResult{}, fmt.Errorf("iterate user page: %w", err)
+	}
+	hasNext := len(accounts) > params.Limit
+	if hasNext {
+		accounts = accounts[:params.Limit]
+	}
+	var nextCursor *ports.UserListCursor
+	if hasNext {
+		last := accounts[len(accounts)-1]
+		nextCursor = &ports.UserListCursor{ID: last.ID(), CreatedAt: last.CreatedAt()}
+	}
+	return ports.ListUsersResult{Users: accounts, HasNext: hasNext, NextCursor: nextCursor, TotalItems: totalItems}, nil
 }
 
 func isEmailDuplicateError(err error) bool {

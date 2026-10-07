@@ -25,6 +25,7 @@ Cache-Control: no-store
 {
   "id": "21696fca-8846-4e0c-9479-57f079e2290c",
   "relatedUser": "66db68b1-a3e9-4c24-9ed1-8069c742e7aa",
+  "relatedUserEmail": "bia@example.com",
   "createdAt": "2026-09-20T18:30:00Z",
   "updatedAt": "2026-09-20T18:30:00Z",
   "summarySortAt": "2026-09-20T18:30:00Z"
@@ -35,11 +36,14 @@ Cache-Control: no-store
 | --- | --- | --- |
 | `id` | string | Identificador único do chat. |
 | `relatedUser` | string | ID do outro participante em relação ao usuário autenticado. Não é um objeto de usuário. |
+| `relatedUserEmail` | string | E-mail do outro participante na listagem; vazio se o cadastro não existir. |
 | `createdAt` | string | Data de criação em UTC, no formato RFC 3339. |
 | `updatedAt` | string | Data da última atualização em UTC, no formato RFC 3339. |
 | `summarySortAt` | string | Data usada para ordenar a lista de chats, em ordem decrescente. |
 
 Um chat direto é compartilhado pelos dois participantes. O backend garante que exista no máximo um chat direto para o mesmo par de usuários, independentemente de quem iniciou a conversa.
+
+`relatedUserEmail` é incluído na resposta de `GET /v1/chats`; a resposta de criação continua contendo `relatedUser` sem esse campo adicional.
 
 ---
 

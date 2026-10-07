@@ -28,11 +28,12 @@ type listResponse struct {
 }
 
 type listChatResponse struct {
-	ID            string    `json:"id"`
-	RelatedUser   string    `json:"relatedUser"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-	SummarySortAt time.Time `json:"summarySortAt"`
+	ID               string    `json:"id"`
+	RelatedUser      string    `json:"relatedUser"`
+	RelatedUserEmail string    `json:"relatedUserEmail"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+	SummarySortAt    time.Time `json:"summarySortAt"`
 }
 
 type listPaginationResponse struct {
@@ -261,11 +262,12 @@ func mapListResponse(
 		items = append(
 			items,
 			listChatResponse{
-				ID:            listedChat.ID,
-				RelatedUser:   listedChat.RelatedUser,
-				CreatedAt:     listedChat.CreatedAt,
-				UpdatedAt:     listedChat.UpdatedAt,
-				SummarySortAt: listedChat.SummarySortAt,
+				ID:               listedChat.ID,
+				RelatedUser:      listedChat.RelatedUser,
+				RelatedUserEmail: listedChat.RelatedUserEmail,
+				CreatedAt:        listedChat.CreatedAt,
+				UpdatedAt:        listedChat.UpdatedAt,
+				SummarySortAt:    listedChat.SummarySortAt,
 			},
 		)
 	}
