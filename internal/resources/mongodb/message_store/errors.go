@@ -22,4 +22,8 @@ var (
 	ErrInvalidCreateParams = errors.New(
 		"invalid create message parameters",
 	)
+
+	ErrInvalidStoredDocument = errors.New(
+		"invalid stored message document",
+	)
 )

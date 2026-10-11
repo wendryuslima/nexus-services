@@ -1,9 +1,12 @@
 package messagestore
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/wendryuslima/nexus-services/internal/domain/chat"
 	"github.com/wendryuslima/nexus-services/internal/domain/timeline"
+	"github.com/wendryuslima/nexus-services/internal/domain/user"
 	"github.com/wendryuslima/nexus-services/internal/ports"
 )
 
@@ -126,4 +129,116 @@ func newOutboxEventDocument(
 		LastError:     nil,
 		CreatedAt:     createdAt,
 	}
+}
+
+func (document timelineItemDocument) toDomain() (*timeline.Item, error) {
+	itemID, err := timeline.ParseID(document.ID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%w: parse item id: %v",
+			ErrInvalidStoredDocument,
+			err,
+		)
+	}
+
+	chatID, err := chat.ParseID(document.ChatID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%w: parse chat id: %v",
+			ErrInvalidStoredDocument,
+			err,
+		)
+	}
+
+	sequence, err := timeline.ParseSequence(document.Sequence)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%w: parse sequence: %v",
+			ErrInvalidStoredDocument,
+			err,
+		)
+	}
+
+	kind, err := timeline.ParseKind(document.Kind)
+	if err != nil || kind != timeline.KindMessage {
+		return nil, fmt.Errorf(
+			"%w: unsupported item kind %q",
+			ErrInvalidStoredDocument,
+			document.Kind,
+		)
+	}
+
+	clientMessageID, err := timeline.ParseClientMessageID(
+		document.Message.ClientMessageID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%w: parse client message id: %v",
+			ErrInvalidStoredDocument,
+			err,
+		)
+	}
+
+	senderID, err := user.ParseID(document.Message.SenderID)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%w: parse sender id: %v",
+			ErrInvalidStoredDocument,
+			err,
+		)
+	}
+
+	contentType, err := timeline.ParseContentType(
+		document.Message.Content.Type,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%w: parse content type: %v",
+			ErrInvalidStoredDocument,
+			err,
+		)
+	}
+
+	content, err := timeline.NewMessageContent(
+		contentType,
+		document.Message.Content.Value,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%w: restore content: %v",
+			ErrInvalidStoredDocument,
+			err,
+		)
+	}
+
+	message, err := timeline.NewMessage(
+		clientMessageID,
+		senderID,
+		content,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%w: restore message: %v",
+			ErrInvalidStoredDocument,
+			err,
+		)
+	}
+
+	item, err := timeline.RestoreMessage(
+		itemID,
+		chatID,
+		sequence,
+		document.CreatedAt,
+		document.UpdatedAt,
+		message,
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%w: restore timeline item: %v",
+			ErrInvalidStoredDocument,
+			err,
+		)
+	}
+
+	return item, nil
 }
