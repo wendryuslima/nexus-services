@@ -11,14 +11,15 @@ import (
 const (
 	authPrefix = "/v1/auth/"
 
-	signupPath      = "/v1/auth/signup"
-	signinPath      = "/v1/auth/signin"
-	refreshPath     = "/v1/auth/refresh"
-	logoutPath      = "/v1/auth/logout"
-	usersPath       = "/v1/users"
-	chatsPrefix     = "/v1/chats/"
-	chatsPath       = "/v1/chats"
-	directChatsPath = "/v1/chats/direct"
+	signupPath       = "/v1/auth/signup"
+	signinPath       = "/v1/auth/signin"
+	refreshPath      = "/v1/auth/refresh"
+	logoutPath       = "/v1/auth/logout"
+	usersPath        = "/v1/users"
+	chatsPrefix      = "/v1/chats/"
+	chatsPath        = "/v1/chats"
+	directChatsPath  = "/v1/chats/direct"
+	chatMessagesPath = "/v1/chats/{chatId}/messages"
 )
 
 var _ http.Handler = (*Router)(nil)
@@ -35,9 +36,10 @@ type UsersHandlers struct {
 }
 
 type ChatsHandlers struct {
-	List         http.Handler
-	CreateDirect http.Handler
-	Timeline     http.Handler
+	List          http.Handler
+	CreateDirect  http.Handler
+	CreateMessage http.Handler
+	Timeline      http.Handler
 }
 
 type BrowserSecurity interface {
@@ -58,6 +60,9 @@ func validateChatsHandlers(handlers ChatsHandlers) error {
 	}
 	if handlers.CreateDirect == nil {
 		return fmt.Errorf("%w: create direct", ErrNilChatHandler)
+	}
+	if handlers.CreateMessage == nil {
+		return fmt.Errorf("%w: create message", ErrNilChatHandler)
 	}
 	if handlers.Timeline == nil {
 		return fmt.Errorf("%w: timeline", ErrNilChatHandler)
@@ -150,6 +155,7 @@ func New(
 	chatsRouter := http.NewServeMux()
 	chatsRouter.Handle(chatsPath, chatHandlers.List)
 	chatsRouter.Handle(directChatsPath, chatHandlers.CreateDirect)
+	chatsRouter.Handle(chatMessagesPath, chatHandlers.CreateMessage)
 	chatsRouter.Handle(chatsPrefix, chatHandlers.Timeline)
 	chatsRouter.Handle("/", notFoundHandler)
 

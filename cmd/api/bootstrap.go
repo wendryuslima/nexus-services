@@ -11,6 +11,7 @@ import (
 
 	applicationauth "github.com/wendryuslima/nexus-services/internal/application/auth"
 	applicationchats "github.com/wendryuslima/nexus-services/internal/application/chats"
+	applicationmessages "github.com/wendryuslima/nexus-services/internal/application/messages"
 	applicationtimeline "github.com/wendryuslima/nexus-services/internal/application/timeline"
 	applicationusers "github.com/wendryuslima/nexus-services/internal/application/users"
 	authcookie "github.com/wendryuslima/nexus-services/internal/drivers/http/auth_cookie"
@@ -27,6 +28,8 @@ import (
 	"github.com/wendryuslima/nexus-services/internal/resources/identifier"
 	"github.com/wendryuslima/nexus-services/internal/resources/mongodb"
 	chatrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/chat_repository"
+	messagestore "github.com/wendryuslima/nexus-services/internal/resources/mongodb/message_store"
+	outboxrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/outbox_repository"
 	sessionrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/session_repository"
 	timelinerepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/timeline_repository"
 	userrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/user_repository"
@@ -42,6 +45,7 @@ const (
 	sessionsCollectionName  = "sessions"
 	chatsCollectionName     = "chats"
 	timelineCollectionName  = "timeline_items"
+	outboxCollectionName    = "outbox_events"
 )
 
 func run(ctx context.Context, logger *slog.Logger) (runErr error) {
@@ -83,6 +87,10 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("get timeline collection: %w", err)
 	}
+	outboxCollection, err := mongoClient.Collection(outboxCollectionName)
+	if err != nil {
+		return fmt.Errorf("get outbox collection: %w", err)
+	}
 
 	users, err := userrepository.NewRepository(usersCollection)
 	if err != nil {
@@ -104,6 +112,19 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("create timeline repository: %w", err)
 	}
+	outboxEvents, err := outboxrepository.NewRepository(outboxCollection)
+	if err != nil {
+		return fmt.Errorf("create outbox repository: %w", err)
+	}
+	messageStore, err := messagestore.NewRepository(
+		mongoClient,
+		chatsCollection,
+		timelineCollection,
+		outboxCollection,
+	)
+	if err != nil {
+		return fmt.Errorf("create message store: %w", err)
+	}
 
 	if err := users.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("ensure user indexes: %w", err)
@@ -119,6 +140,9 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	}
 	if err := timelineItems.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("ensure timeline indexes: %w", err)
+	}
+	if err := outboxEvents.EnsureIndexes(ctx); err != nil {
+		return fmt.Errorf("ensure outbox indexes: %w", err)
 	}
 
 	appClock := clock.NewSystemClock()
@@ -203,6 +227,17 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("create list timeline use case: %w", err)
 	}
+	createMessageUseCase, err := applicationmessages.NewCreateUseCase(
+		applicationmessages.CreateDependencies{
+			ChatRepository: chats,
+			MessageStore:   messageStore,
+			IDGenerator:    ids,
+			Clock:          appClock,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("create message use case: %w", err)
+	}
 
 	authenticateUseCase, err := applicationauth.NewAuthenticateUseCase(
 		applicationauth.AuthenticateDependencies{
@@ -260,6 +295,13 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("create timeline handler: %w", err)
 	}
+	createMessageHandler, err := chatshandler.NewCreateMessageHandler(
+		createMessageUseCase,
+		logger,
+	)
+	if err != nil {
+		return fmt.Errorf("create message handler: %w", err)
+	}
 
 	browserMiddleware, err := browsersecurity.New(browsersecurity.Config{
 		AllowedOrigins: configs.allowedOrigins, PreflightMaxAge: corsPreflightMaxAge,
@@ -284,9 +326,10 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 			List: listUsersHandler,
 		},
 		httprouter.ChatsHandlers{
-			List:         listChatsHandler,
-			CreateDirect: createDirectChatHandler,
-			Timeline:     timelineHandler,
+			List:          listChatsHandler,
+			CreateDirect:  createDirectChatHandler,
+			CreateMessage: createMessageHandler,
+			Timeline:      timelineHandler,
 		},
 		browserMiddleware,
 		authenticationMiddleware,
