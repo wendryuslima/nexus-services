@@ -1,0 +1,231 @@
+# Contrato HTTP — Mensagens
+
+Este documento descreve o contrato público disponível para o frontend criar mensagens em um chat existente.
+
+## Visão geral
+
+| Operação | Método | Rota | Autenticação | Sucesso |
+| --- | --- | --- | --- | --- |
+| Criar mensagem | `POST` | `/v1/chats/{chatId}/messages` | Obrigatória | `201` ou `200` |
+
+A sessão é enviada pelo navegador em cookies `HttpOnly`. O frontend deve usar `credentials: "include"` no Fetch ou `withCredentials: true` no Axios. Não leia nem envie JWTs manualmente.
+
+As respostas JSON usam:
+
+```http
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+```
+
+---
+
+## `POST /v1/chats/{chatId}/messages`
+
+Persiste uma mensagem de texto e cria, na mesma transação, o registro interno que permitirá sua entrega futura. A resposta confirma apenas a persistência; ela não confirma que outro usuário recebeu ou leu a mensagem.
+
+### Parâmetro de rota
+
+| Parâmetro | Tipo | Descrição |
+| --- | --- | --- |
+| `chatId` | string | Identificador do chat no qual a mensagem será criada. O usuário autenticado precisa participar dele. |
+
+O backend retorna o mesmo `404 chat_not_found` tanto para um chat inexistente quanto para um chat ao qual o usuário não possui acesso.
+
+### Corpo da requisição
+
+```json
+{
+  "clientMessageId": "018f92d4-2c47-7c87-b33e-d2ea331d2ff2",
+  "content": {
+    "type": "TEXT",
+    "value": "Olá!"
+  }
+}
+```
+
+| Campo | Tipo | Obrigatório | Regras |
+| --- | --- | --- | --- |
+| `clientMessageId` | string | Sim | UUID canônico, diferente do UUID nulo. Deve ser gerado uma vez pelo cliente e reutilizado em retries da mesma mensagem. |
+| `content` | object | Sim | Conteúdo da mensagem. |
+| `content.type` | string | Sim | Atualmente somente `TEXT`. |
+| `content.value` | string | Sim | Texto UTF-8 não vazio, com no máximo 4.000 caracteres Unicode. |
+
+Não envie `senderId`, `recipientId`, `sequence`, `createdAt` nem qualquer identificador de usuário. O remetente é sempre extraído da sessão autenticada.
+
+O JSON é estrito: campos desconhecidos, corpo vazio, JSON malformado e mais de um valor JSON são rejeitados. O corpo inteiro possui limite de 20 KiB.
+
+### Resposta — mensagem criada
+
+Status: `201 Created`
+
+```json
+{
+  "data": {
+    "id": "6ab85d4aa94d3539db5a83a6",
+    "clientMessageId": "018f92d4-2c47-7c87-b33e-d2ea331d2ff2",
+    "chatId": "6ab85d4aa94d3539db5a83a0",
+    "sequence": 183,
+    "senderId": "6a7521f266ec07731754f78e",
+    "content": {
+      "type": "TEXT",
+      "value": "Olá!"
+    },
+    "createdAt": "2026-10-13T12:00:00Z",
+    "deliveryStatus": "PERSISTED"
+  }
+}
+```
+
+### Resposta — retry idempotente
+
+Status: `200 OK`
+
+O formato do corpo é idêntico ao da resposta `201`. Isso significa que uma tentativa anterior com o mesmo `clientMessageId` já foi persistida e o backend devolveu a mensagem original.
+
+O frontend deve tratar `200` e `201` como sucesso e substituir o estado otimista pela mensagem retornada pelo servidor.
+
+### Schema da resposta
+
+| Campo | Tipo | Descrição |
+| --- | --- | --- |
+| `data.id` | string | ID persistido da mensagem. Use-o como identidade definitiva da mensagem. |
+| `data.clientMessageId` | string | ID gerado pelo cliente para idempotência e reconciliação do estado otimista. |
+| `data.chatId` | string | ID do chat. |
+| `data.sequence` | integer | Ordem crescente e estável da mensagem dentro do chat. |
+| `data.senderId` | string | ID do remetente autenticado. |
+| `data.content.type` | string | Tipo do conteúdo, atualmente `TEXT`. |
+| `data.content.value` | string | Texto persistido. |
+| `data.createdAt` | string | Data RFC 3339 em UTC. |
+| `data.deliveryStatus` | string | Estado visível ao remetente. Atualmente sempre `PERSISTED`. |
+
+`PERSISTED` significa que a mensagem e o evento interno de outbox foram confirmados no MongoDB. Não significa que houve entrega ao destinatário; recibos e atualização em tempo real ainda não fazem parte deste contrato.
+
+---
+
+## Idempotência e retries
+
+A chave de idempotência é o par formado por usuário autenticado e `clientMessageId`.
+
+| Situação | Resultado |
+| --- | --- |
+| Primeira tentativa válida | `201 Created` e nova mensagem. |
+| Retry com mesmo `clientMessageId`, chat e conteúdo | `200 OK` e a mensagem original. |
+| Mesmo `clientMessageId` com outro chat ou conteúdo | `409 idempotency_conflict`. |
+
+Fluxo recomendado no frontend:
+
+1. Gere `clientMessageId` antes de criar o item otimista.
+2. Guarde-o junto do item local enquanto a requisição estiver pendente.
+3. Em erro de rede, timeout do cliente ou resposta desconhecida, repita a mesma requisição com o mesmo `clientMessageId`.
+4. Em `200` ou `201`, substitua o item local pelos campos retornados, principalmente `id` e `sequence`.
+5. Em `409`, não repita com esse ID; trate como falha do item otimista e gere um novo ID apenas se a pessoa optar por reenviar como uma nova mensagem.
+
+Não gere outro `clientMessageId` automaticamente após timeout. O servidor pode ter concluído a transação e perdido apenas a resposta HTTP.
+
+---
+
+## Erros
+
+Todas as respostas de erro usam este envelope:
+
+```json
+{
+  "error": {
+    "code": "invalid_message_content",
+    "message": "Informe um conteúdo de mensagem válido."
+  }
+}
+```
+
+O frontend deve tomar decisões por `error.code`. O texto de `error.message` é adequado para exibição, mas pode mudar.
+
+| HTTP | `error.code` | Quando ocorre |
+| ---: | --- | --- |
+| `400` | `invalid_request` | Corpo vazio, JSON inválido, campo desconhecido ou mais de um valor JSON. |
+| `401` | `unauthenticated` | Cookie ausente, token inválido/expirado ou sessão inativa. |
+| `403` | `cross_origin_request_rejected` | A política de origem rejeitou a chamada. |
+| `404` | `chat_not_found` | Chat inexistente ou usuário sem participação no chat. |
+| `405` | `method_not_allowed` | Método diferente de `POST`. A resposta inclui `Allow: POST`. |
+| `409` | `idempotency_conflict` | `clientMessageId` já foi usado para outra mensagem lógica. |
+| `413` | `request_body_too_large` | Corpo acima de 20 KiB. |
+| `415` | `unsupported_media_type` | `Content-Type` diferente de `application/json`. |
+| `422` | `invalid_client_message_id` | `clientMessageId` ausente ou inválido. |
+| `422` | `invalid_message_content` | Tipo ou valor do conteúdo inválido. |
+| `422` | `message_content_too_long` | Texto acima de 4.000 caracteres Unicode. |
+| `504` | `request_timeout` | A operação excedeu o prazo do servidor. |
+| `500` | `internal_error` | Falha inesperada. |
+
+---
+
+## Exemplo com Fetch
+
+```ts
+export interface MessageContent {
+  type: "TEXT";
+  value: string;
+}
+
+export interface Message {
+  id: string;
+  clientMessageId: string;
+  chatId: string;
+  sequence: number;
+  senderId: string;
+  content: MessageContent;
+  createdAt: string;
+  deliveryStatus: "PERSISTED";
+}
+
+export interface CreateMessageResponse {
+  data: Message;
+}
+
+export interface APIErrorResponse {
+  error: {
+    code: string;
+    message: string;
+  };
+}
+
+export async function createMessage(
+  chatId: string,
+  clientMessageId: string,
+  value: string,
+): Promise<Message> {
+  const response = await fetch(`${API_URL}/v1/chats/${chatId}/messages`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      clientMessageId,
+      content: {
+        type: "TEXT",
+        value,
+      },
+    }),
+  });
+
+  const payload: CreateMessageResponse | APIErrorResponse =
+    await response.json();
+
+  if (!response.ok) {
+    throw new APIError(payload as APIErrorResponse, response.status);
+  }
+
+  return (payload as CreateMessageResponse).data;
+}
+```
+
+---
+
+## Fora do escopo atual
+
+Este contrato ainda não define:
+
+- edição ou exclusão de mensagens;
+- anexos e outros tipos de conteúdo;
+- recibos de entrega ou leitura;
+- sincronização incremental por `sequence`;
+- atualizações em tempo real por WebSocket.

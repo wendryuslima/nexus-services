@@ -62,14 +62,33 @@ services:
     networks:
       - backend
 
+  mongodb-keyfile:
+    image: mongo:8.0.29-noble
+    entrypoint:
+      - /bin/bash
+      - -ec
+      - |
+        if [ ! -s /mongo-keyfile/keyfile ]; then
+          openssl rand -base64 756 > /mongo-keyfile/keyfile
+        fi
+        chown mongodb:mongodb /mongo-keyfile/keyfile
+        chmod 400 /mongo-keyfile/keyfile
+    volumes:
+      - mongodb_keyfile:/mongo-keyfile
+
   mongodb:
     image: mongo:8.0.29-noble
     restart: unless-stopped
+    depends_on:
+      mongodb-keyfile:
+        condition: service_completed_successfully
 
     command:
       - mongod
       - --replSet
       - rs0
+      - --keyFile
+      - /mongo-keyfile/keyfile
       - --bind_ip_all
 
     ports:
@@ -85,6 +104,7 @@ services:
 
     volumes:
       - mongodb_data:/data/db
+      - mongodb_keyfile:/mongo-keyfile:ro
       
 
     healthcheck:
@@ -106,6 +126,7 @@ services:
 
 volumes:
   mongodb_data:
+  mongodb_keyfile:
 
 networks:
   backend:

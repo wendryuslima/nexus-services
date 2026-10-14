@@ -61,7 +61,7 @@ type CreateMessageHandler struct {
 	logger  *slog.Logger
 }
 
-// NewCreateMessageHandler creates the HTTP adapter for message creation.
+
 func NewCreateMessageHandler(
 	useCase CreateMessageExecutor,
 	logger *slog.Logger,
@@ -79,8 +79,7 @@ func NewCreateMessageHandler(
 	}, nil
 }
 
-// ServeHTTP authenticates the request, decodes its JSON body, and delegates
-// persistence to the application use case.
+
 func (handler *CreateMessageHandler) ServeHTTP(
 	writer http.ResponseWriter,
 	httpRequest *http.Request,
@@ -157,8 +156,7 @@ func (handler *CreateMessageHandler) ServeHTTP(
 	writePayload(handler.logger, writer, status, mapCreateMessageResponse(output))
 }
 
-// createMessageChatIDFromPath extracts a chat ID only from the exact message
-// creation path, rejecting extra segments and empty identifiers.
+
 func createMessageChatIDFromPath(path string) (string, bool) {
 	if !strings.HasPrefix(path, createMessagePathPrefix) ||
 		!strings.HasSuffix(path, createMessagePathSuffix) {
@@ -176,7 +174,7 @@ func createMessageChatIDFromPath(path string) (string, bool) {
 	return chatID, true
 }
 
-// mapCreateMessageResponse maps application output to the public HTTP schema.
+
 func mapCreateMessageResponse(output applicationmessages.CreateOutput) createMessageResponse {
 	return createMessageResponse{
 		Data: createMessageResponseData{
@@ -195,8 +193,7 @@ func mapCreateMessageResponse(output applicationmessages.CreateOutput) createMes
 	}
 }
 
-// handleUseCaseError translates expected application failures into safe HTTP
-// responses and logs only unexpected failures.
+
 func (handler *CreateMessageHandler) handleUseCaseError(
 	writer http.ResponseWriter,
 	httpRequest *http.Request,

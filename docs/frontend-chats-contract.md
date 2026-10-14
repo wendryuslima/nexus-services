@@ -396,8 +396,7 @@ Ao receber `401 unauthenticated`:
 Este contrato ainda não define:
 
 - `GET /v1/chats/:chatId` para carregar um chat individual;
-- endpoints de mensagens;
-- envio, edição ou exclusão de mensagens;
+- edição ou exclusão de mensagens;
 - atualizações em tempo real.
 
-O frontend já pode criar um chat, listar chats e navegar para `/chats/:chatId`, mas o carregamento da tela individual e da timeline dependerá desses endpoints futuros.
+O envio de mensagens está documentado em [Contrato HTTP — Mensagens](frontend-messages-contract.md). O frontend já pode criar um chat, listar chats, criar mensagens e navegar para `/chats/:chatId`.
