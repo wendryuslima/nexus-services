@@ -1,6 +1,26 @@
 name: nexus
 
 services:
+
+ 
+  nats:
+    image: nats:2.15.0-alpine
+    restart: unless-stopped
+
+
+    command: ["-js", "-sd", "/data"]
+
+    ports:
+     
+      - "127.0.0.1:${NATS_PORT:-4222}:4222"
+
+    volumes:
+    
+      - nats_data:/data
+
+    networks:
+     
+      - backend
   api:
     build:
       context: .
@@ -106,6 +126,7 @@ services:
       - mongodb_data:/data/db
       - mongodb_keyfile:/mongo-keyfile:ro
       
+      
 
     healthcheck:
       test:
@@ -127,6 +148,7 @@ services:
 volumes:
   mongodb_data:
   mongodb_keyfile:
+  nats_data:
 
 networks:
   backend:
