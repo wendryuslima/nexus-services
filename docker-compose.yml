@@ -21,6 +21,43 @@ services:
     networks:
      
       - backend
+  outbox-publisher:
+ 
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+   
+    entrypoint: ["/app/nexus-outbox-publisher"]
+    init: true
+    restart: unless-stopped
+
+   
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      nats:
+        condition: service_started
+
+    environment:
+    
+      MONGODB_DATABASE: "${MONGODB_DATABASE:?MONGODB_DATABASE is required}"
+      MONGODB_URI: "${MONGODB_URI:?MONGODB_URI is required}"
+      MONGODB_CONNECT_TIMEOUT: "${MONGODB_CONNECT_TIMEOUT:?MONGODB_CONNECT_TIMEOUT is required}"
+      MONGODB_OPERATION_TIMEOUT: "${MONGODB_OPERATION_TIMEOUT:?MONGODB_OPERATION_TIMEOUT is required}"
+
+     
+      NATS_URL: "nats://nats:4222"
+
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - "no-new-privileges:true"
+    stop_grace_period: 30s
+    networks:
+      - backend
+
   api:
     build:
       context: .
