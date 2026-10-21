@@ -23,6 +23,13 @@ RUN CGO_ENABLED=0 GOOS=linux \
     -o /out/nexus-outbox-publisher \
     ./cmd/outbox-publisher
 
+RUN CGO_ENABLED=0 GOOS=linux \
+    go build \
+    -trimpath \
+    -ldflags="-s -w" \
+    -o /out/nexus-delivery-dispatcher \
+    ./cmd/delivery-dispatcher
+
 FROM alpine:3.24.1 AS runtime
 
 RUN apk add --no-cache ca-certificates \
@@ -39,6 +46,10 @@ COPY --from=builder --chown=nexus:nexus \
 COPY --from=builder --chown=nexus:nexus \
     /out/nexus-outbox-publisher \
     /app/nexus-outbox-publisher
+
+COPY --from=builder --chown=nexus:nexus \
+    /out/nexus-delivery-dispatcher \
+    /app/nexus-delivery-dispatcher
 
 USER nexus:nexus
 

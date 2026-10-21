@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"hash/fnv"
 	"strings"
-	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
 	"github.com/wendryuslima/nexus-services/internal/ports"
@@ -16,19 +15,8 @@ import (
 const (
 	streamName = "CHAT_EVENTS"
 
-	messageCreatedType = "chat.message.created.v1"
-
 	messageCreatedSubjectPrefix = "chat.message.created"
 )
-
-type messageCreatedEnvelope struct {
-	EventID       string                      `json:"eventId"`
-	EventType     string                      `json:"eventType"`
-	AggregateType string                      `json:"aggregateType"`
-	AggregateID   string                      `json:"aggregateId"`
-	OccurredAt    time.Time                   `json:"occurredAt"`
-	Payload       ports.MessageCreatedPayload `json:"payload"`
-}
 
 type Publisher struct {
 	js         jetstream.JetStream
@@ -63,7 +51,7 @@ func validateEvent(event ports.OutboxEvent) error {
 	payload := event.Payload
 
 	if strings.TrimSpace(event.ID) == "" ||
-		event.EventType != messageCreatedType ||
+		event.EventType != ports.MessageCreatedEventTypeV1 ||
 		event.AggregateType != "CHAT" ||
 		strings.TrimSpace(payload.ChatID) == "" ||
 		event.AggregateID != payload.ChatID ||
@@ -90,7 +78,7 @@ func (publisher *Publisher) Publish(
 		return ports.PublishReceipt{}, err
 	}
 
-	envelope := messageCreatedEnvelope{
+	envelope := ports.MessageCreatedEvent{
 		EventID:       event.ID,
 		EventType:     event.EventType,
 		AggregateType: event.AggregateType,
