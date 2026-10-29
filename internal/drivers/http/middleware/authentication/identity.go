@@ -1,12 +1,17 @@
 package authentication
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 type identityContextKey struct{}
 
 type Identity struct {
-	UserID    string
-	SessionID string
+	UserID           string
+	SessionID        string
+	AccessExpiresAt  time.Time
+	SessionExpiresAt time.Time
 }
 
 func withIdentity(

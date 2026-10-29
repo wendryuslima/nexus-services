@@ -24,10 +24,14 @@ type ListCursorInput struct {
 }
 
 type ListInput struct {
-	CurrentUserID string
-	ChatID        string
-	PageSize      int
-	Cursor        *ListCursorInput
+	CurrentUserID   string
+	ChatID          string
+	PageSize        int
+	Cursor          *ListCursorInput
+	SequenceOrder   bool
+	BeforeSequence  *int64
+	AfterSequence   *int64
+	ThroughSequence *int64
 }
 
 type ListedContent struct {
@@ -36,12 +40,14 @@ type ListedContent struct {
 }
 
 type ListedMessage struct {
-	SenderID string
-	IsMine   bool
-	Content  ListedContent
+	ClientMessageID string
+	SenderID        string
+	IsMine          bool
+	Content         ListedContent
 }
 
 type ListedItem struct {
+	Sequence  int64
 	ID        string
 	Kind      string
 	CreatedAt time.Time
@@ -55,14 +61,17 @@ type ListCursorOutput struct {
 }
 
 type ListPaginationOutput struct {
-	HasNext    bool
-	NextCursor *ListCursorOutput
-	PageSize   int
+	NextBeforeSequence *int64
+	NextAfterSequence  *int64
+	HasNext            bool
+	NextCursor         *ListCursorOutput
+	PageSize           int
 }
 
 type ListOutput struct {
-	Items      []ListedItem
-	Pagination ListPaginationOutput
+	SnapshotThroughSequence *int64
+	Items                   []ListedItem
+	Pagination              ListPaginationOutput
 }
 
 type ListDependencies struct {
@@ -105,6 +114,9 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 	if err != nil {
 		return ListOutput{}, err
 	}
+	if err := validateSequenceInput(input); err != nil {
+		return ListOutput{}, err
+	}
 
 	conversation, err := useCase.chatRepository.FindByID(ctx, chatID)
 	if errors.Is(err, ports.ErrChatNotFound) {
@@ -121,11 +133,18 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 	}
 
 	result, err := useCase.timelineRepository.ListByChat(ctx, ports.ListTimelineParams{
-		ChatID: chatID,
-		Limit:  pageSize,
-		Before: cursor,
+		ChatID:          chatID,
+		Limit:           pageSize,
+		Before:          cursor,
+		SequenceOrder:   input.SequenceOrder,
+		BeforeSequence:  input.BeforeSequence,
+		AfterSequence:   input.AfterSequence,
+		ThroughSequence: input.ThroughSequence,
 	})
 	if err != nil {
+		if errors.Is(err, ports.ErrInvalidTimelinePagination) {
+			return ListOutput{}, ErrInvalidCursor
+		}
 		return ListOutput{}, fmt.Errorf("list timeline by chat: %w", err)
 	}
 
@@ -143,28 +162,62 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 		}
 		content := message.Content()
 		items = append(items, ListedItem{
+			Sequence:  item.Sequence().Int64(),
 			ID:        item.ID().String(),
 			Kind:      string(item.Kind()),
 			CreatedAt: item.CreatedAt(),
 			UpdatedAt: item.UpdatedAt(),
 			Message: ListedMessage{
-				SenderID: message.SenderID().String(),
-				IsMine:   message.SenderID().String() == currentUserID.String(),
-				Content:  ListedContent{Type: string(content.Type()), Value: content.Value()},
+				ClientMessageID: message.ClientMessageID().String(),
+				SenderID:        message.SenderID().String(),
+				IsMine:          message.SenderID().String() == currentUserID.String(),
+				Content:         ListedContent{Type: string(content.Type()), Value: content.Value()},
 			},
 		})
 	}
 
-	nextCursor, err := mapNextCursor(result)
+	var nextCursor *ListCursorOutput
+	if !input.SequenceOrder && input.AfterSequence == nil {
+		nextCursor, err = mapNextCursor(result)
+	}
 	if err != nil {
 		return ListOutput{}, err
 	}
 	return ListOutput{
-		Items: items,
+		SnapshotThroughSequence: result.SnapshotThroughSequence,
+		Items:                   items,
 		Pagination: ListPaginationOutput{
+			NextBeforeSequence: result.NextBeforeSequence, NextAfterSequence: result.NextAfterSequence,
 			HasNext: result.HasNext, NextCursor: nextCursor, PageSize: pageSize,
 		},
 	}, nil
+}
+
+func validateSequenceInput(input ListInput) error {
+	if (input.SequenceOrder || input.AfterSequence != nil || input.BeforeSequence != nil || input.ThroughSequence != nil) && input.Cursor != nil {
+		return ErrInvalidCursor
+	}
+	if input.BeforeSequence != nil && (!input.SequenceOrder || input.AfterSequence != nil) {
+		return ErrInvalidCursor
+	}
+	if input.AfterSequence != nil && input.SequenceOrder {
+		return ErrInvalidCursor
+	}
+	if input.ThroughSequence != nil && input.AfterSequence == nil {
+		return ErrInvalidCursor
+	}
+	for _, value := range []*int64{input.BeforeSequence, input.AfterSequence, input.ThroughSequence} {
+		if value != nil && (*value < 0 || *value > domaintimeline.MaxSequence) {
+			return ErrInvalidCursor
+		}
+	}
+	if input.BeforeSequence != nil && *input.BeforeSequence == 0 {
+		return ErrInvalidCursor
+	}
+	if input.AfterSequence != nil && input.ThroughSequence != nil && *input.AfterSequence > *input.ThroughSequence {
+		return ErrInvalidCursor
+	}
+	return nil
 }
 
 func normalizePageSize(requested int) (int, error) {

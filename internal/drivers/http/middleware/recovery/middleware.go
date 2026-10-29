@@ -1,7 +1,9 @@
 package recovery
 
 import (
+	"bufio"
 	"log/slog"
+	"net"
 	"net/http"
 	"runtime/debug"
 
@@ -94,4 +96,12 @@ func (writer *trackingResponseWriter) Write(content []byte) (int, error) {
 
 func (writer *trackingResponseWriter) Unwrap() http.ResponseWriter {
 	return writer.ResponseWriter
+}
+
+func (writer *trackingResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	conn, buffer, err := http.NewResponseController(writer.ResponseWriter).Hijack()
+	if err == nil {
+		writer.wroteHeader = true
+	}
+	return conn, buffer, err
 }

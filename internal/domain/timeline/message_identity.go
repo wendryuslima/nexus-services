@@ -6,7 +6,8 @@ import (
 )
 
 const (
-	nilClientMessageID = "00000000-0000-0000-0000-000000000000"
+	nilClientMessageID       = "00000000-0000-0000-0000-000000000000"
+	MaxSequence        int64 = 1<<53 - 1
 )
 
 var clientMessageIDPattern = regexp.MustCompile(
@@ -34,7 +35,7 @@ func (id ClientMessageID) String() string {
 type Sequence int64
 
 func ParseSequence(rawSequence int64) (Sequence, error) {
-	if rawSequence <= 0 {
+	if rawSequence <= 0 || rawSequence > MaxSequence {
 		return 0, ErrInvalidSequence
 	}
 	return Sequence(rawSequence), nil

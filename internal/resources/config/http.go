@@ -99,7 +99,7 @@ func (config HTTPConfig) Validate() error {
 		}
 	}
 
-	if config.ReadTimeout > config.ReadTimeout {
+	if config.ReadHeaderTimeout > config.ReadTimeout {
 		return fmt.Errorf("%w: read header timeout cannot exceed read timeout",
 			ErrInvalidHTTPConfig)
 	}

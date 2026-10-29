@@ -42,10 +42,11 @@ func TestPublishMessageCreatedUsesRecipientSubject(t *testing.T) {
 		t.Fatal(err)
 	}
 	event := ports.RealtimeMessageCreated{
+		Version:    ports.RealtimeProtocolVersion,
 		Type:       ports.RealtimeMessageCreatedType,
 		EventID:    "event-1",
 		OccurredAt: time.Date(2026, time.October, 20, 12, 0, 0, 0, time.UTC),
-		Data:       ports.RealtimeMessageData{ID: "message-1"},
+		Data:       ports.RealtimeMessageData{ID: "message-1", ChatID: "chat-1", Sequence: 1, SenderID: "sender-1", CreatedAt: time.Now(), Content: ports.OutboxContent{Type: "TEXT", Value: "Olá"}},
 	}
 	if err := publisher.PublishMessageCreated(context.Background(), recipientID, event); err != nil {
 		t.Fatal(err)
@@ -74,7 +75,8 @@ func TestPublishMessageCreatedRejectsSubjectInjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = publisher.PublishMessageCreated(context.Background(), recipientID, ports.RealtimeMessageCreated{
-		Type: ports.RealtimeMessageCreatedType, EventID: "event-1",
+		Version: 1, Type: ports.RealtimeMessageCreatedType, EventID: "event-1", OccurredAt: time.Now(),
+		Data: ports.RealtimeMessageData{ID: "message-1", ChatID: "chat-1", Sequence: 1, SenderID: "sender-1", CreatedAt: time.Now(), Content: ports.OutboxContent{Type: "TEXT", Value: "Olá"}},
 	})
 	if !errors.Is(err, ports.ErrInvalidMessageCreatedEvent) || connection.subject != "" {
 		t.Fatalf("expected invalid recipient without NATS publication, got %v", err)

@@ -64,8 +64,10 @@ func (middleware *Middleware) Wrap(next http.Handler) (http.Handler, error) {
 		}
 
 		identity := Identity{
-			UserID:    output.UserID,
-			SessionID: output.SessionID,
+			UserID:           output.UserID,
+			SessionID:        output.SessionID,
+			AccessExpiresAt:  output.AccessExpiresAt,
+			SessionExpiresAt: output.SessionExpiresAt,
 		}
 		authenticatedContext := withIdentity(httpRequest.Context(), identity)
 		next.ServeHTTP(writer, httpRequest.WithContext(authenticatedContext))

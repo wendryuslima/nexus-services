@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	websocketgateway "github.com/wendryuslima/nexus-services/internal/drivers/websocket"
+	realtimesubscriber "github.com/wendryuslima/nexus-services/internal/resources/nats/realtime_subscriber"
 	"log/slog"
 	"net/http"
 
@@ -273,6 +275,36 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("create logout handler: %w", err)
 	}
+	sessionUseCase, err := applicationauth.NewSessionUseCase(users, appClock)
+	if err != nil {
+		return fmt.Errorf("create session use case: %w", err)
+	}
+	sessionHandler, err := authhandler.NewSessionHandler(sessionUseCase, logger)
+	if err != nil {
+		return err
+	}
+	if err := timelineItems.CheckRealtimeData(ctx); err != nil {
+		return fmt.Errorf("realtime data audit: %w", err)
+	}
+	subscriber, err := realtimesubscriber.New(configs.realtime.NATSURL, configs.realtime.MaxMessageBytes, configs.realtime.NATSFlushTimeout, logger)
+	if err != nil {
+		return fmt.Errorf("create realtime subscriber: %w", err)
+	}
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), configs.realtime.ShutdownTimeout)
+		defer cancel()
+		runErr = errors.Join(runErr, subscriber.Close(closeCtx))
+	}()
+	gateway, err := websocketgateway.New(configs.realtime, configs.allowedOrigins, subscriber, sessions, ids, logger)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), configs.realtime.ShutdownTimeout)
+		defer cancel()
+		runErr = errors.Join(runErr, gateway.Shutdown(closeCtx))
+	}()
+	logger.Info("realtime gateway started", "path", "/v1/realtime")
 	listUsersHandler, err := usershandler.NewListHandler(listUsersUseCase, logger)
 	if err != nil {
 		return fmt.Errorf("create list users handler: %w", err)
@@ -317,6 +349,7 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	}
 	router, err := httprouter.New(
 		httprouter.AuthHandlers{
+			Session: sessionHandler,
 			Signup:  signupHandler,
 			Signin:  signinHandler,
 			Refresh: refreshHandler,
@@ -334,6 +367,7 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 		browserMiddleware,
 		authenticationMiddleware,
 		logger,
+		gateway,
 	)
 
 	if err != nil {
@@ -355,10 +389,31 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 		return fmt.Errorf("create HTTP server: %w", err)
 	}
 
-	return server.Run(ctx)
+	serverCtx, cancelServer := context.WithCancel(context.Background())
+	defer cancelServer()
+	serverDone := make(chan error, 1)
+	go func() { serverDone <- server.Run(serverCtx) }()
+	select {
+	case err := <-serverDone:
+		return err
+	case <-ctx.Done():
+		var realtimeShutdownErr error
+		if gateway != nil {
+			shutdown, cancel := context.WithTimeout(context.Background(), configs.realtime.ShutdownTimeout)
+			err := gateway.Shutdown(shutdown)
+			realtimeShutdownErr = err
+			cancel()
+			if err != nil {
+				logger.Warn("realtime shutdown deadline reached")
+			}
+		}
+		cancelServer()
+		return errors.Join(realtimeShutdownErr, <-serverDone)
+	}
 }
 
 type applicationConfig struct {
+	realtime       config.RealtimeConfig
 	mongoDB        config.MongoDBConfig
 	auth           config.AuthConfig
 	http           config.HTTPConfig
@@ -386,7 +441,11 @@ func loadConfiguration() (applicationConfig, error) {
 		)
 	}
 
-	return applicationConfig{mongoDB: mongoConfig, auth: authConfig, http: httpConfig, allowedOrigins: allowedOrigins}, nil
+	realtimeConfig, err := config.LoadRealtimeConfig()
+	if err != nil {
+		return applicationConfig{}, err
+	}
+	return applicationConfig{realtime: realtimeConfig, mongoDB: mongoConfig, auth: authConfig, http: httpConfig, allowedOrigins: allowedOrigins}, nil
 }
 
 func authCookieConfig(cookieConfig config.CookieConfig) authcookie.Config {

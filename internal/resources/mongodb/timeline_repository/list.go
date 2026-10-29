@@ -14,6 +14,9 @@ func (repository *Repository) ListByChat(ctx context.Context, params ports.ListT
 	if err := validateListParams(params); err != nil {
 		return ports.ListTimelineResult{}, err
 	}
+	if params.SequenceOrder || params.AfterSequence != nil {
+		return repository.listBySequence(ctx, params)
+	}
 
 	cursor, err := repository.collection.Find(ctx, buildListFilter(params), options.Find().
 		SetSort(bson.D{{Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}).

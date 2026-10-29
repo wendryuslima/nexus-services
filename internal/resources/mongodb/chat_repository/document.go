@@ -44,7 +44,7 @@ func newChatDocument(conversation *chat.Chat) (chatDocument, error) {
 		CreatedAt:     conversation.CreatedAt().UTC(),
 		UpdatedAt:     conversation.UpdatedAt().UTC(),
 		SummarySortAt: conversation.SummarySortAt().UTC(),
-		LastSequence:  0,
+		LastSequence:  conversation.LastSequence(),
 	}, nil
 }
 
@@ -100,6 +100,7 @@ func (document chatDocument) toDomain() (*chat.Chat, error) {
 		document.CreatedAt,
 		document.UpdatedAt,
 		document.SummarySortAt,
+		document.LastSequence,
 	)
 	if err != nil {
 		return nil, fmt.Errorf(

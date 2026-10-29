@@ -40,6 +40,7 @@ Cache-Control: no-store
 | `createdAt` | string | Data de criação em UTC, no formato RFC 3339. |
 | `updatedAt` | string | Data da última atualização em UTC, no formato RFC 3339. |
 | `summarySortAt` | string | Data usada para ordenar a lista de chats, em ordem decrescente. |
+| `lastSequence` | integer | Na listagem, última sequência persistida da conversa; zero para conversa vazia. Permite descobrir mudanças, mas não substitui a timeline. |
 
 Um chat direto é compartilhado pelos dois participantes. O backend garante que exista no máximo um chat direto para o mesmo par de usuários, independentemente de quem iniciou a conversa.
 
@@ -379,10 +380,10 @@ export const api = axios.create({
 
 Ao receber `401 unauthenticated`:
 
-1. Chame `POST /v1/auth/refresh` com credenciais.
-2. Se o refresh retornar `204`, repita a requisição original uma única vez.
+1. Consulte `GET /v1/auth/session` dentro do coordenador entre abas; renove somente se o acesso continuar inválido.
+2. Após confirmar a sessão, repita a requisição original uma única vez.
 3. Se o refresh retornar `401`, limpe o estado local e redirecione para o login.
-4. Evite múltiplos refreshes simultâneos usando uma promessa compartilhada ou fila no cliente HTTP.
+4. Use uma promessa por aba e um Web Lock compartilhado, conforme o contrato de autenticação.
 
 ## Consistência e concorrência
 
@@ -397,6 +398,7 @@ Este contrato ainda não define:
 
 - `GET /v1/chats/:chatId` para carregar um chat individual;
 - edição ou exclusão de mensagens;
-- atualizações em tempo real.
+
+As atualizações em tempo real usam `GET /v1/realtime`, descrito no [guia WebSocket](websocket-implementation-guide.md). A listagem expõe `lastSequence` a partir de `chats.last_sequence`.
 
 O envio de mensagens está documentado em [Contrato HTTP — Mensagens](frontend-messages-contract.md). O frontend já pode criar um chat, listar chats, criar mensagens e navegar para `/chats/:chatId`.

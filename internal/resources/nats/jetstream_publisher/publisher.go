@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/wendryuslima/nexus-services/internal/domain/timeline"
 	"github.com/wendryuslima/nexus-services/internal/ports"
 )
 
@@ -58,6 +59,7 @@ func validateEvent(event ports.OutboxEvent) error {
 		strings.TrimSpace(payload.MessageID) == "" ||
 		strings.TrimSpace(payload.SenderID) == "" ||
 		payload.Sequence <= 0 ||
+		payload.Sequence > timeline.MaxSequence ||
 		payload.CreatedAt.IsZero() ||
 		payload.Content.Type != "TEXT" ||
 		strings.TrimSpace(payload.Content.Value) == "" {

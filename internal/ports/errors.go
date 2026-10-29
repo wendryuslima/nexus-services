@@ -2,6 +2,8 @@ package ports
 
 import "errors"
 
+var ErrInvalidTimelinePagination = errors.New("invalid timeline pagination")
+
 var (
 	ErrUserNotFound               = errors.New("user not found")
 	ErrEmailAlreadyExists         = errors.New("email already exists")

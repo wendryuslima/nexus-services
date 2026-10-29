@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/wendryuslima/nexus-services/internal/domain/user"
 	"github.com/wendryuslima/nexus-services/internal/ports"
@@ -39,8 +38,7 @@ func (publisher *Publisher) PublishMessageCreated(ctx context.Context, recipient
 		return err
 	}
 	id := recipientID.String()
-	if id == "" || strings.ContainsAny(id, ".*> \t\r\n") ||
-		event.Type != ports.RealtimeMessageCreatedType || event.EventID == "" {
+	if !ports.ValidRealtimeUserID(id) || ports.ValidateRealtimeMessage(event) != nil {
 		return ports.ErrInvalidMessageCreatedEvent
 	}
 	data, err := json.Marshal(event)

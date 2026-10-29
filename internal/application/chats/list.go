@@ -29,6 +29,7 @@ type ListInput struct {
 }
 
 type ListedChat struct {
+	LastSequence     int64
 	ID               string
 	RelatedUser      string
 	RelatedUserEmail string
@@ -118,6 +119,7 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 		}
 
 		listedChats = append(listedChats, ListedChat{
+			LastSequence:  conversation.LastSequence(),
 			ID:            conversation.ID().String(),
 			RelatedUser:   relatedUserID.String(),
 			CreatedAt:     conversation.CreatedAt(),

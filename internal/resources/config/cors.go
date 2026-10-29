@@ -80,6 +80,9 @@ func normalizeOrigin(rawOrigin string) (string, error) {
 	if parsedOrigin.Hostname() == "" {
 		return "", fmt.Errorf("hostname is required")
 	}
+	if strings.ContainsAny(parsedOrigin.Host, "*?\\") {
+		return "", fmt.Errorf("origin must contain an exact host")
+	}
 
 	if parsedOrigin.User != nil {
 		return "", fmt.Errorf("credentials are not allowed")

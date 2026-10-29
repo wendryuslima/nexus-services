@@ -6,10 +6,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	applicationtimeline "github.com/wendryuslima/nexus-services/internal/application/timeline"
+	"github.com/wendryuslima/nexus-services/internal/domain/timeline"
 	"github.com/wendryuslima/nexus-services/internal/drivers/http/middleware/authentication"
 )
 
@@ -27,11 +29,13 @@ type timelineResponse struct {
 }
 
 type timelineResponseData struct {
-	Items      []timelineItemResponse     `json:"items"`
-	Pagination timelinePaginationResponse `json:"pagination"`
+	SnapshotThroughSequence *int64                     `json:"snapshotThroughSequence,omitempty"`
+	Items                   []timelineItemResponse     `json:"items"`
+	Pagination              timelinePaginationResponse `json:"pagination"`
 }
 
 type timelineItemResponse struct {
+	Sequence  int64                   `json:"sequence"`
 	ID        string                  `json:"id"`
 	Kind      string                  `json:"kind"`
 	CreatedAt time.Time               `json:"createdAt"`
@@ -40,9 +44,10 @@ type timelineItemResponse struct {
 }
 
 type timelineMessageResponse struct {
-	SenderID string                  `json:"senderId"`
-	IsMine   bool                    `json:"isMine"`
-	Content  timelineContentResponse `json:"content"`
+	ClientMessageID string                  `json:"clientMessageId,omitempty"`
+	SenderID        string                  `json:"senderId"`
+	IsMine          bool                    `json:"isMine"`
+	Content         timelineContentResponse `json:"content"`
 }
 
 type timelineContentResponse struct {
@@ -51,9 +56,11 @@ type timelineContentResponse struct {
 }
 
 type timelinePaginationResponse struct {
-	HasNext    bool                        `json:"hasNext"`
-	NextCursor *timelineNextCursorResponse `json:"nextCursor"`
-	PageSize   int                         `json:"pageSize"`
+	NextBeforeSequence *int64                      `json:"nextBeforeSequence"`
+	NextAfterSequence  *int64                      `json:"nextAfterSequence"`
+	HasNext            bool                        `json:"hasNext"`
+	NextCursor         *timelineNextCursorResponse `json:"nextCursor"`
+	PageSize           int                         `json:"pageSize"`
 }
 
 type timelineNextCursorResponse struct {
@@ -118,6 +125,17 @@ func timelineChatIDFromPath(path string) (string, bool) {
 }
 
 func parseTimelineInput(query url.Values, currentUserID string, chatID string) (applicationtimeline.ListInput, error) {
+	for _, values := range query {
+		if len(values) != 1 {
+			return applicationtimeline.ListInput{}, ErrInvalidQueryParameter
+		}
+	}
+	if query.Has("pageSize") {
+		n, err := strconv.Atoi(query.Get("pageSize"))
+		if err != nil || n < 1 || n > 100 {
+			return applicationtimeline.ListInput{}, ErrInvalidQueryParameter
+		}
+	}
 	pageSize, err := parseOptionalIntegerQuery(query, "pageSize")
 	if err != nil {
 		return applicationtimeline.ListInput{}, err
@@ -138,18 +156,46 @@ func parseTimelineInput(query url.Values, currentUserID string, chatID string) (
 	if hasCursorID {
 		cursor = &applicationtimeline.ListCursorInput{ID: cursorID, CreatedAt: cursorCreatedAt}
 	}
-	return applicationtimeline.ListInput{
+	input := applicationtimeline.ListInput{
 		CurrentUserID: currentUserID, ChatID: chatID, PageSize: pageSize, Cursor: cursor,
-	}, nil
+	}
+	if query.Has("order") {
+		if query.Get("order") != "sequence" {
+			return input, ErrInvalidQueryParameter
+		}
+		input.SequenceOrder = true
+	}
+	for key, target := range map[string]**int64{"beforeSequence": &input.BeforeSequence, "afterSequence": &input.AfterSequence, "throughSequence": &input.ThroughSequence} {
+		if query.Has(key) {
+			raw := query.Get(key)
+			if raw == "" || strings.IndexFunc(raw, func(r rune) bool { return r < '0' || r > '9' }) != -1 {
+				return input, ErrInvalidQueryParameter
+			}
+			value, err := strconv.ParseInt(raw, 10, 64)
+			if err != nil || value > timeline.MaxSequence {
+				return input, ErrInvalidQueryParameter
+			}
+			*target = &value
+		}
+	}
+	if cursor != nil && (input.SequenceOrder || input.BeforeSequence != nil || input.AfterSequence != nil || input.ThroughSequence != nil) ||
+		input.BeforeSequence != nil && (!input.SequenceOrder || *input.BeforeSequence == 0) ||
+		input.AfterSequence != nil && (input.SequenceOrder || input.BeforeSequence != nil) ||
+		input.ThroughSequence != nil && (input.AfterSequence == nil || *input.AfterSequence > *input.ThroughSequence) {
+		return input, ErrInvalidQueryParameter
+	}
+	return input, nil
 }
 
 func mapTimelineResponse(output applicationtimeline.ListOutput) timelineResponse {
 	items := make([]timelineItemResponse, 0, len(output.Items))
 	for _, item := range output.Items {
 		items = append(items, timelineItemResponse{
-			ID: item.ID, Kind: item.Kind, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
+			Sequence: item.Sequence,
+			ID:       item.ID, Kind: item.Kind, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
 			Message: timelineMessageResponse{
-				SenderID: item.Message.SenderID, IsMine: item.Message.IsMine,
+				ClientMessageID: item.Message.ClientMessageID,
+				SenderID:        item.Message.SenderID, IsMine: item.Message.IsMine,
 				Content: timelineContentResponse{Type: item.Message.Content.Type, Value: item.Message.Content.Value},
 			},
 		})
@@ -161,8 +207,10 @@ func mapTimelineResponse(output applicationtimeline.ListOutput) timelineResponse
 		}
 	}
 	return timelineResponse{Data: timelineResponseData{
-		Items: items,
+		SnapshotThroughSequence: output.SnapshotThroughSequence,
+		Items:                   items,
 		Pagination: timelinePaginationResponse{
+			NextBeforeSequence: output.Pagination.NextBeforeSequence, NextAfterSequence: output.Pagination.NextAfterSequence,
 			HasNext: output.Pagination.HasNext, NextCursor: nextCursor, PageSize: output.Pagination.PageSize,
 		},
 	}}

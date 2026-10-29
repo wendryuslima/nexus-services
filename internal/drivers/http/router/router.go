@@ -25,6 +25,7 @@ const (
 var _ http.Handler = (*Router)(nil)
 
 type AuthHandlers struct {
+	Session http.Handler
 	Signup  http.Handler
 	Signin  http.Handler
 	Refresh http.Handler
@@ -77,6 +78,7 @@ func New(
 	browserSecurity BrowserSecurity,
 	authentication Authentication,
 	logger *slog.Logger,
+	realtimeHandlers ...http.Handler,
 ) (*Router, error) {
 	if err := validateAuthHandlers(authHandlers); err != nil {
 		return nil, err
@@ -102,6 +104,16 @@ func New(
 	notFoundHandler := newNotFoundHandler(logger)
 
 	authRouter := http.NewServeMux()
+	if authHandlers.Session != nil {
+		protectedSession, err := authentication.Wrap(authHandlers.Session)
+		if err != nil {
+			return nil, err
+		}
+		authRouter.Handle("/v1/auth/session", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "no-store")
+			protectedSession.ServeHTTP(w, r)
+		}))
+	}
 
 	authRouter.Handle(
 		signupPath,
@@ -169,6 +181,17 @@ func New(
 	}
 
 	rootRouter := http.NewServeMux()
+	if len(realtimeHandlers) > 0 && realtimeHandlers[0] != nil {
+		authenticated, err := authentication.Wrap(realtimeHandlers[0])
+		if err != nil {
+			return nil, err
+		}
+		protected, err := browserSecurity.Wrap(authenticated)
+		if err != nil {
+			return nil, err
+		}
+		rootRouter.Handle("/v1/realtime", protected)
+	}
 
 	rootRouter.Handle(usersPath, protectedUsersHandler)
 
@@ -199,6 +222,7 @@ func (router *Router) ServeHTTP(
 	writer http.ResponseWriter,
 	httpRequest *http.Request,
 ) {
+	writer.Header().Set("Cache-Control", "no-store")
 	router.handler.ServeHTTP(
 		writer,
 		httpRequest,

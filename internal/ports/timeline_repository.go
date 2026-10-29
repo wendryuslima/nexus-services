@@ -14,15 +14,22 @@ type TimelineCursor struct {
 }
 
 type ListTimelineParams struct {
-	ChatID chat.ID
-	Limit  int
-	Before *TimelineCursor
+	ChatID          chat.ID
+	Limit           int
+	Before          *TimelineCursor
+	SequenceOrder   bool
+	BeforeSequence  *int64
+	AfterSequence   *int64
+	ThroughSequence *int64
 }
 
 type ListTimelineResult struct {
-	Items      []*timeline.Item
-	HasNext    bool
-	NextCursor *TimelineCursor
+	Items                   []*timeline.Item
+	HasNext                 bool
+	NextCursor              *TimelineCursor
+	SnapshotThroughSequence *int64
+	NextBeforeSequence      *int64
+	NextAfterSequence       *int64
 }
 
 type TimelineRepository interface {

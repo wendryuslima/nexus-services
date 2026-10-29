@@ -24,12 +24,13 @@ type claimedContentDocument struct {
 }
 
 type claimedPayloadDocument struct {
-	MessageID string                 `bson:"messageId"`
-	ChatID    string                 `bson:"chatId"`
-	Sequence  int64                  `bson:"sequence"`
-	SenderID  string                 `bson:"senderId"`
-	Content   claimedContentDocument `bson:"content"`
-	CreatedAt time.Time              `bson:"createdAt"`
+	MessageID       string                 `bson:"messageId"`
+	ClientMessageID string                 `bson:"clientMessageId"`
+	ChatID          string                 `bson:"chatId"`
+	Sequence        int64                  `bson:"sequence"`
+	SenderID        string                 `bson:"senderId"`
+	Content         claimedContentDocument `bson:"content"`
+	CreatedAt       time.Time              `bson:"createdAt"`
 }
 
 type claimedEventDocument struct {
@@ -50,8 +51,12 @@ func (document claimedEventDocument) toPort() *ports.OutboxEvent {
 		EventType:     document.EventType,
 		Attempts:      document.Attempts,
 		LeaseID:       document.LeaseID,
+
 		Payload: ports.MessageCreatedPayload{
 			MessageID: document.Payload.MessageID,
+
+			ClientMessageID: document.Payload.ClientMessageID,
+
 			ChatID:    document.Payload.ChatID,
 			Sequence:  document.Payload.Sequence,
 			SenderID:  document.Payload.SenderID,

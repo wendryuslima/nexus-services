@@ -2,6 +2,8 @@ package chat
 
 import "errors"
 
+var ErrInvalidSequence = errors.New("invalid chat sequence")
+
 var (
 	ErrInvalidID            = errors.New("chat id cannot be empty")
 	ErrInvalidParticipant   = errors.New("chat participant cannot be empty")

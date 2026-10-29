@@ -140,6 +140,21 @@ Os cookies têm `HttpOnly`, `Path=/`, `Max-Age`, `Expires` e política `SameSite
 
 ---
 
+## `GET /v1/auth/session`
+
+Valida o access token em cookie e a sessão persistida, sem rotacionar credenciais. Usa `Cache-Control: no-store` também nas respostas não autenticadas.
+
+```json
+{
+  "data": {
+    "user": { "id": "user-id", "email": "pessoa@example.com" },
+    "accessExpiresAt": "2026-10-27T15:15:00Z"
+  }
+}
+```
+
+Retorna `401 unauthenticated` se o acesso estiver ausente, expirado, inválido ou associado a uma sessão inativa. Não retorna tokens. Uma falha de rede ou indisponibilidade não deve ser tratada como logout.
+
 ## `POST /v1/auth/refresh`
 
 Renova a sessão usando o cookie de refresh. Há rotação: a cada sucesso, os dois cookies são substituídos por novos valores.
@@ -201,6 +216,7 @@ Não há corpo. Os cookies de autenticação são expirados, inclusive se o cook
 | `POST` | `/v1/auth/signin` | Não | `200` |
 | `POST` | `/v1/auth/refresh` | Cookie de refresh | `204` |
 | `POST` | `/v1/auth/logout` | Cookie de refresh, quando existir | `204` |
+| `GET` | `/v1/auth/session` | Cookie de acesso e sessão ativa | `200` |
 
 `OPTIONS` é usado automaticamente pelo navegador para preflight CORS. Outros métodos retornam `405 method_not_allowed` e header `Allow: POST`.
 
@@ -232,8 +248,8 @@ Access-Control-Allow-Headers: Content-Type
 
 1. No cadastro, chame `signup`; após `201`, redirecione ao login.
 2. No login, chame `signin` com `credentials: "include"`; após `200`, grave somente `user_id` e `email` no estado da interface.
-3. Ao iniciar a aplicação ou receber `401` de uma rota protegida futura, chame `refresh` uma única vez.
-4. Se `refresh` retornar `204`, repita a requisição original uma vez; se retornar `401`, mostre a tela de login.
-5. No logout, chame `logout` com `credentials: "include"`; após `204`, limpe o estado local e redirecione ao login.
+3. Ao iniciar a aplicação, consulte `GET /v1/auth/session`. Em `401`, adquira o lock entre abas e consulte novamente; outra aba pode ter atualizado o cookie.
+4. Se o acesso continuar inválido, execute um refresh e repita a consulta de sessão. Repita a requisição protegida original no máximo uma vez. Um refresh recusado com `401` encerra o estado autenticado.
+5. No logout, suspenda sockets e callbacks antes da requisição. Após `204`, limpe os caches e sinalize as outras abas. Em falha de rede, informe que a revogação não foi confirmada.
 
-Evite chamadas concorrentes de `refresh`: como há rotação do refresh token, múltiplas chamadas simultâneas podem invalidar a sessão. Centralize a renovação em um único interceptor/fila no cliente HTTP.
+Centralize a renovação em uma promessa por aba e um Web Lock compartilhado entre abas da mesma origem. O frontend também serializa signin/logout com esse lock. `BroadcastChannel` transporta somente sinais, sem tokens. O suporte atual exige navegadores com Web Locks; não existe fallback sem exclusão mútua.

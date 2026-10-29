@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/wendryuslima/nexus-services/internal/domain/chat"
+	"github.com/wendryuslima/nexus-services/internal/domain/timeline"
 	"github.com/wendryuslima/nexus-services/internal/domain/user"
 	"github.com/wendryuslima/nexus-services/internal/ports"
 )
@@ -40,10 +41,16 @@ func validateMessageCreated(event ports.MessageCreatedEvent) error {
 		strings.TrimSpace(payload.MessageID) == "" ||
 		strings.TrimSpace(payload.SenderID) == "" ||
 		payload.Sequence <= 0 ||
+		payload.Sequence > timeline.MaxSequence ||
 		payload.CreatedAt.IsZero() ||
 		payload.Content.Type != "TEXT" ||
 		strings.TrimSpace(payload.Content.Value) == "" {
 		return ports.ErrInvalidMessageCreatedEvent
+	}
+	if payload.ClientMessageID != "" {
+		if _, err := timeline.ParseClientMessageID(payload.ClientMessageID); err != nil {
+			return ports.ErrInvalidMessageCreatedEvent
+		}
 	}
 	return nil
 }
@@ -88,20 +95,25 @@ func (useCase *DispatchMessageCreated) Dispatch(ctx context.Context, event ports
 	}
 
 	publicEvent := ports.RealtimeMessageCreated{
+		Version:    ports.RealtimeProtocolVersion,
 		Type:       ports.RealtimeMessageCreatedType,
 		EventID:    event.EventID,
 		OccurredAt: event.OccurredAt.UTC(),
 		Data: ports.RealtimeMessageData{
-			ID:        event.Payload.MessageID,
-			ChatID:    event.Payload.ChatID,
-			Sequence:  event.Payload.Sequence,
-			SenderID:  event.Payload.SenderID,
-			Content:   event.Payload.Content,
-			CreatedAt: event.Payload.CreatedAt.UTC(),
+			ID:              event.Payload.MessageID,
+			ClientMessageID: event.Payload.ClientMessageID,
+			ChatID:          event.Payload.ChatID,
+			Sequence:        event.Payload.Sequence,
+			SenderID:        event.Payload.SenderID,
+			Content:         event.Payload.Content,
+			CreatedAt:       event.Payload.CreatedAt.UTC(),
 		},
 	}
 	if err := useCase.realtime.PublishMessageCreated(ctx, recipientID, publicEvent); err != nil {
 		return fmt.Errorf("publish recipient notification: %w", err)
+	}
+	if err := useCase.realtime.PublishMessageCreated(ctx, senderID, publicEvent); err != nil {
+		return fmt.Errorf("publish sender notification: %w", err)
 	}
 	return nil
 }

@@ -14,12 +14,13 @@ type OutboxContent struct {
 }
 
 type MessageCreatedPayload struct {
-	MessageID string        `json:"messageId"`
-	ChatID    string        `json:"chatId"`
-	Sequence  int64         `json:"sequence"`
-	SenderID  string        `json:"senderId"`
-	Content   OutboxContent `json:"content"`
-	CreatedAt time.Time     `json:"createdAt"`
+	MessageID       string        `json:"messageId"`
+	ClientMessageID string        `json:"clientMessageId,omitempty"`
+	ChatID          string        `json:"chatId"`
+	Sequence        int64         `json:"sequence"`
+	SenderID        string        `json:"senderId"`
+	Content         OutboxContent `json:"content"`
+	CreatedAt       time.Time     `json:"createdAt"`
 }
 
 type OutboxEvent struct {

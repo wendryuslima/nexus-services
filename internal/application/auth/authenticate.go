@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/wendryuslima/nexus-services/internal/domain/session"
 	"github.com/wendryuslima/nexus-services/internal/ports"
@@ -15,8 +16,10 @@ type AuthenticateInput struct {
 }
 
 type AuthenticateOutput struct {
-	UserID    string
-	SessionID string
+	UserID           string
+	SessionID        string
+	AccessExpiresAt  time.Time
+	SessionExpiresAt time.Time
 }
 
 type AuthenticateDependencies struct {
@@ -106,7 +109,7 @@ func (useCase *AuthenticateUseCase) Execute(
 		)
 	}
 
-	if authSession.UserID().String() != claims.UserID.String() {
+	if authSession == nil || authSession.UserID().String() != claims.UserID.String() || !claims.ExpiresAt.After(useCase.clock.Now().UTC()) {
 		return AuthenticateOutput{}, ErrUnauthenticated
 	}
 
@@ -125,7 +128,9 @@ func (useCase *AuthenticateUseCase) Execute(
 	}
 
 	return AuthenticateOutput{
-		UserID:    claims.UserID.String(),
-		SessionID: claims.SessionID.String(),
+		UserID:           claims.UserID.String(),
+		SessionID:        claims.SessionID.String(),
+		AccessExpiresAt:  claims.ExpiresAt.UTC(),
+		SessionExpiresAt: authSession.ExpiresAt().UTC(),
 	}, nil
 }

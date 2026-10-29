@@ -82,14 +82,14 @@ Status: `200 OK`
 
 O formato do corpo é idêntico ao da resposta `201`. Isso significa que uma tentativa anterior com o mesmo `clientMessageId` já foi persistida e o backend devolveu a mensagem original.
 
-O frontend deve tratar `200` e `201` como sucesso e substituir o estado otimista pela mensagem retornada pelo servidor.
+O frontend deve tratar `200` e `201` como sucesso. A notificação `message.created` atualiza diretamente a timeline e a posição/data da conversa conhecida; o sucesso do POST não dispara GETs adicionais. A implementação atual não insere estado otimista antes da confirmação de persistência.
 
 ### Schema da resposta
 
 | Campo | Tipo | Descrição |
 | --- | --- | --- |
 | `data.id` | string | ID persistido da mensagem. Use-o como identidade definitiva da mensagem. |
-| `data.clientMessageId` | string | ID gerado pelo cliente para idempotência e reconciliação do estado otimista. |
+| `data.clientMessageId` | string | ID gerado pelo cliente para idempotência e correlação do envio persistido. |
 | `data.chatId` | string | ID do chat. |
 | `data.sequence` | integer | Ordem crescente e estável da mensagem dentro do chat. |
 | `data.senderId` | string | ID do remetente autenticado. |
@@ -98,7 +98,7 @@ O frontend deve tratar `200` e `201` como sucesso e substituir o estado otimista
 | `data.createdAt` | string | Data RFC 3339 em UTC. |
 | `data.deliveryStatus` | string | Estado visível ao remetente. Atualmente sempre `PERSISTED`. |
 
-`PERSISTED` significa que a mensagem e o evento interno de outbox foram confirmados no MongoDB. Não significa que houve entrega ao destinatário; recibos e atualização em tempo real ainda não fazem parte deste contrato.
+`PERSISTED` significa que a mensagem e o evento interno de outbox foram confirmados no MongoDB. A notificação em tempo real atualiza a tela, sem confirmar entrega ao destinatário nem leitura.
 
 ---
 
@@ -227,5 +227,5 @@ Este contrato ainda não define:
 - edição ou exclusão de mensagens;
 - anexos e outros tipos de conteúdo;
 - recibos de entrega ou leitura;
-- sincronização incremental por `sequence`;
-- atualizações em tempo real por WebSocket.
+
+A sincronização incremental está disponível no [contrato da timeline](frontend-timeline-contract.md). A notificação `message.created` é entregue a ambos os participantes via WebSocket, incluindo as outras abas do remetente. O envio permanece HTTP e `PERSISTED` continua significando somente persistência confirmada.

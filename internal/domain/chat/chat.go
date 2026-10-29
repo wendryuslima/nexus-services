@@ -31,13 +31,24 @@ type Chat struct {
 	createdAt        time.Time
 	updatedAt        time.Time
 	summarySortAt    time.Time
+	lastSequence     int64
 }
 
 func NewDirect(id ID, firstParticipantID user.ID, secondParticipantID user.ID, now time.Time) (*Chat, error) {
 	return RestoreDirect(id, firstParticipantID, secondParticipantID, now, now, now)
 }
 
-func RestoreDirect(id ID, firstParticipantID user.ID, secondParticipantID user.ID, createdAt time.Time, updatedAt time.Time, summarySortAt time.Time) (*Chat, error) {
+func RestoreDirect(id ID, firstParticipantID user.ID, secondParticipantID user.ID, createdAt time.Time, updatedAt time.Time, summarySortAt time.Time, persistedSequence ...int64) (*Chat, error) {
+	var lastSequence int64
+	if len(persistedSequence) > 1 {
+		return nil, ErrInvalidSequence
+	}
+	if len(persistedSequence) == 1 {
+		lastSequence = persistedSequence[0]
+	}
+	if lastSequence < 0 || lastSequence > 1<<53-1 {
+		return nil, ErrInvalidSequence
+	}
 	if id.String() == "" {
 		return nil, ErrInvalidID
 	}
@@ -70,12 +81,15 @@ func RestoreDirect(id ID, firstParticipantID user.ID, secondParticipantID user.I
 		createdAt:        createdAt.UTC(),
 		updatedAt:        updatedAt.UTC(),
 		summarySortAt:    summarySortAt.UTC(),
+		lastSequence:     lastSequence,
 	}, nil
 }
 
 func (chat *Chat) ID() ID {
 	return chat.id
 }
+
+func (chat *Chat) LastSequence() int64 { return chat.lastSequence }
 
 func (chat *Chat) ParticipantOneID() user.ID {
 	return chat.participantOneID

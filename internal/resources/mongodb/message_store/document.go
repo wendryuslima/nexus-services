@@ -45,12 +45,13 @@ type eventContentDocument struct {
 }
 
 type messageCreatedPayloadDocument struct {
-	MessageID string               `bson:"messageId" json:"messageId"`
-	ChatID    string               `bson:"chatId" json:"chatId"`
-	Sequence  int64                `bson:"sequence" json:"sequence"`
-	SenderID  string               `bson:"senderId" json:"senderId"`
-	Content   eventContentDocument `bson:"content" json:"content"`
-	CreatedAt time.Time            `bson:"createdAt" json:"createdAt"`
+	MessageID       string               `bson:"messageId" json:"messageId"`
+	ClientMessageID string               `bson:"clientMessageId,omitempty" json:"clientMessageId,omitempty"`
+	ChatID          string               `bson:"chatId" json:"chatId"`
+	Sequence        int64                `bson:"sequence" json:"sequence"`
+	SenderID        string               `bson:"senderId" json:"senderId"`
+	Content         eventContentDocument `bson:"content" json:"content"`
+	CreatedAt       time.Time            `bson:"createdAt" json:"createdAt"`
 }
 
 type outboxEventDocument struct {
@@ -105,29 +106,36 @@ func newOutboxEventDocument(
 	createdAt := params.CreatedAt.UTC()
 
 	return outboxEventDocument{
+
 		ID:            params.EventID,
 		AggregateType: aggregateTypeChat,
 		AggregateID:   params.ChatID.String(),
 		EventType:     messageCreatedEventType,
+
 		Payload: messageCreatedPayloadDocument{
 			MessageID: params.MessageID.String(),
-			ChatID:    params.ChatID.String(),
-			Sequence:  sequence.Int64(),
-			SenderID:  message.SenderID().String(),
+
+			ClientMessageID: message.ClientMessageID().String(),
+
+			ChatID:   params.ChatID.String(),
+			Sequence: sequence.Int64(),
+			SenderID: message.SenderID().String(),
 			Content: eventContentDocument{
 				Type:  string(content.Type()),
 				Value: content.Value(),
 			},
 			CreatedAt: createdAt,
 		},
+
 		Status:        outboxStatusPending,
 		Attempts:      0,
 		NextAttemptAt: createdAt,
-		LockedBy:      nil,
-		LockedUntil:   nil,
-		PublishedAt:   nil,
-		LastError:     nil,
-		CreatedAt:     createdAt,
+
+		LockedBy:    nil,
+		LockedUntil: nil,
+		PublishedAt: nil,
+		LastError:   nil,
+		CreatedAt:   createdAt,
 	}
 }
 

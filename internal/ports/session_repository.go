@@ -31,3 +31,7 @@ type SessionRepository interface {
 		revokedAt time.Time,
 	) error
 }
+
+type SessionBatchReader interface {
+	FindByIDs(context.Context, []session.ID) ([]*session.Session, error)
+}

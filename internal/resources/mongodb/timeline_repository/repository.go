@@ -3,6 +3,7 @@ package timelinerepository
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/wendryuslima/nexus-services/internal/ports"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -21,7 +22,8 @@ const (
 var _ ports.TimelineRepository = (*Repository)(nil)
 
 type Repository struct {
-	collection *mongo.Collection
+	collection          *mongo.Collection
+	sequenceDataChecked atomic.Bool
 }
 
 func NewRepository(
