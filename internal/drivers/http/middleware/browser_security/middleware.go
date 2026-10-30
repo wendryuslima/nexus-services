@@ -250,6 +250,7 @@ func normalizeOrigin(rawOrigin string) (string, error) {
 func setCredentialedCORSHeaders(header http.Header, origin string) {
 	header.Set("Access-Control-Allow-Origin", origin)
 	header.Set("Access-Control-Allow-Credentials", "true")
+	header.Set("Access-Control-Expose-Headers", "Retry-After")
 }
 
 func addVaryHeaders(header http.Header) {

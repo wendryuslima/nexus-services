@@ -54,6 +54,34 @@ Não envie `senderId`, `recipientId`, `sequence`, `createdAt` nem qualquer ident
 
 O JSON é estrito: campos desconhecidos, corpo vazio, JSON malformado e mais de um valor JSON são rejeitados. O corpo inteiro possui limite de 20 KiB.
 
+### Limites de envio por usuário
+
+O endpoint aceita até **30 tentativas de envio em 10 segundos** e **60 em 60 segundos**, em janelas deslizantes. Ambos os limites são aplicados simultaneamente por usuário autenticado, somando todos os chats, abas e dispositivos. A contagem é compartilhada entre instâncias da API pelo MongoDB.
+
+Cada tentativa admitida consome uma posição antes de validar o corpo ou persistir a mensagem, inclusive retries idempotentes e requisições que depois falhem. Tentativas rejeitadas com `429` não consomem posições nem prolongam a espera. Esse controle não se aplica a consultas da timeline ou eventos de recebimento via WebSocket.
+
+Ao atingir qualquer limite, o endpoint responde:
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 10
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+```
+
+```json
+{
+  "error": {
+    "code": "message_rate_limit_exceeded",
+    "message": "Você enviou mensagens muito rápido. Aguarde 10 segundos."
+  }
+}
+```
+
+`Retry-After` contém o número inteiro de segundos até haver capacidade nas duas janelas, arredondado para cima. O valor é calculado a cada recusa; `10` é apenas um exemplo. O cabeçalho é exposto por CORS para as origens permitidas. O frontend deve pausar os envios pelo prazo informado, manter o texto digitado e reutilizar o mesmo `clientMessageId` ao tentar novamente. Outros dispositivos podem consumir a capacidade liberada nesse intervalo, causando novo `429`.
+
+Se o controle de frequência estiver indisponível, o envio é recusado com `503 message_rate_limit_unavailable` e `Retry-After: 1`, sem criar a mensagem. A coleção `message_rate_limits` e seu índice TTL são preparados na inicialização da API; registros sem atividade expiram automaticamente.
+
 ### Resposta — mensagem criada
 
 Status: `201 Created`
@@ -152,6 +180,8 @@ O frontend deve tomar decisões por `error.code`. O texto de `error.message` é 
 | `422` | `invalid_client_message_id` | `clientMessageId` ausente ou inválido. |
 | `422` | `invalid_message_content` | Tipo ou valor do conteúdo inválido. |
 | `422` | `message_content_too_long` | Texto acima de 4.000 caracteres Unicode. |
+| `429` | `message_rate_limit_exceeded` | Limite de envio por usuário atingido. Aguarde o prazo de `Retry-After`. |
+| `503` | `message_rate_limit_unavailable` | Controle de frequência indisponível. Tente novamente após `Retry-After`. |
 | `504` | `request_timeout` | A operação excedeu o prazo do servidor. |
 | `500` | `internal_error` | Falha inesperada. |
 

@@ -3,14 +3,17 @@ package chats
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	applicationmessages "github.com/wendryuslima/nexus-services/internal/application/messages"
 	"github.com/wendryuslima/nexus-services/internal/drivers/http/middleware/authentication"
 	"github.com/wendryuslima/nexus-services/internal/drivers/http/request"
+	"github.com/wendryuslima/nexus-services/internal/ports"
 )
 
 const (
@@ -57,13 +60,14 @@ type createMessageContentResponse struct {
 }
 
 type CreateMessageHandler struct {
-	useCase CreateMessageExecutor
-	logger  *slog.Logger
+	useCase     CreateMessageExecutor
+	rateLimiter ports.MessageRateLimiter
+	logger      *slog.Logger
 }
-
 
 func NewCreateMessageHandler(
 	useCase CreateMessageExecutor,
+	rateLimiter ports.MessageRateLimiter,
 	logger *slog.Logger,
 ) (*CreateMessageHandler, error) {
 	if useCase == nil {
@@ -72,13 +76,16 @@ func NewCreateMessageHandler(
 	if logger == nil {
 		return nil, ErrNilLogger
 	}
+	if rateLimiter == nil {
+		return nil, ErrNilRateLimiter
+	}
 
 	return &CreateMessageHandler{
-		useCase: useCase,
-		logger:  logger,
+		useCase:     useCase,
+		rateLimiter: rateLimiter,
+		logger:      logger,
 	}, nil
 }
-
 
 func (handler *CreateMessageHandler) ServeHTTP(
 	writer http.ResponseWriter,
@@ -120,6 +127,10 @@ func (handler *CreateMessageHandler) ServeHTTP(
 		return
 	}
 
+	if !handler.reserveSendAttempt(writer, httpRequest, identity.UserID) {
+		return
+	}
+
 	var body createMessageRequest
 	if err := request.DecodeJSON(
 		writer,
@@ -156,6 +167,31 @@ func (handler *CreateMessageHandler) ServeHTTP(
 	writePayload(handler.logger, writer, status, mapCreateMessageResponse(output))
 }
 
+func (handler *CreateMessageHandler) reserveSendAttempt(writer http.ResponseWriter, httpRequest *http.Request, userID string) bool {
+	retryAfter, err := handler.rateLimiter.Reserve(httpRequest.Context(), userID)
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return false
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			handler.handleUseCaseError(writer, httpRequest, err)
+			return false
+		}
+		handler.logger.ErrorContext(httpRequest.Context(), "reserve message rate limit failed", slog.Any("error", err))
+		writer.Header().Set("Retry-After", "1")
+		writePublicError(handler.logger, writer, http.StatusServiceUnavailable,
+			"message_rate_limit_unavailable", "Não foi possível enviar a mensagem agora. Tente novamente em instantes.")
+		return false
+	}
+	if retryAfter > 0 {
+		seconds := int64((retryAfter + time.Second - 1) / time.Second)
+		writer.Header().Set("Retry-After", strconv.FormatInt(seconds, 10))
+		writePublicError(handler.logger, writer, http.StatusTooManyRequests,
+			"message_rate_limit_exceeded", fmt.Sprintf("Você enviou mensagens muito rápido. Aguarde %d segundos.", seconds))
+		return false
+	}
+	return true
+}
 
 func createMessageChatIDFromPath(path string) (string, bool) {
 	if !strings.HasPrefix(path, createMessagePathPrefix) ||
@@ -174,7 +210,6 @@ func createMessageChatIDFromPath(path string) (string, bool) {
 	return chatID, true
 }
 
-
 func mapCreateMessageResponse(output applicationmessages.CreateOutput) createMessageResponse {
 	return createMessageResponse{
 		Data: createMessageResponseData{
@@ -192,7 +227,6 @@ func mapCreateMessageResponse(output applicationmessages.CreateOutput) createMes
 		},
 	}
 }
-
 
 func (handler *CreateMessageHandler) handleUseCaseError(
 	writer http.ResponseWriter,

@@ -30,6 +30,7 @@ import (
 	"github.com/wendryuslima/nexus-services/internal/resources/identifier"
 	"github.com/wendryuslima/nexus-services/internal/resources/mongodb"
 	chatrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/chat_repository"
+	messageratelimiter "github.com/wendryuslima/nexus-services/internal/resources/mongodb/message_rate_limiter"
 	messagestore "github.com/wendryuslima/nexus-services/internal/resources/mongodb/message_store"
 	outboxrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/outbox_repository"
 	sessionrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/session_repository"
@@ -41,13 +42,14 @@ import (
 )
 
 const (
-	resourceShutdownTimeout = 10 * time.Second
-	corsPreflightMaxAge     = 10 * time.Minute
-	usersCollectionName     = "users"
-	sessionsCollectionName  = "sessions"
-	chatsCollectionName     = "chats"
-	timelineCollectionName  = "timeline_items"
-	outboxCollectionName    = "outbox_events"
+	resourceShutdownTimeout         = 10 * time.Second
+	corsPreflightMaxAge             = 10 * time.Minute
+	usersCollectionName             = "users"
+	sessionsCollectionName          = "sessions"
+	chatsCollectionName             = "chats"
+	timelineCollectionName          = "timeline_items"
+	outboxCollectionName            = "outbox_events"
+	messageRateLimitsCollectionName = "message_rate_limits"
 )
 
 func run(ctx context.Context, logger *slog.Logger) (runErr error) {
@@ -93,6 +95,10 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("get outbox collection: %w", err)
 	}
+	messageRateLimitsCollection, err := mongoClient.Collection(messageRateLimitsCollectionName)
+	if err != nil {
+		return fmt.Errorf("get message rate limits collection: %w", err)
+	}
 
 	users, err := userrepository.NewRepository(usersCollection)
 	if err != nil {
@@ -127,6 +133,10 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("create message store: %w", err)
 	}
+	messageRateLimiter, err := messageratelimiter.New(messageRateLimitsCollection)
+	if err != nil {
+		return fmt.Errorf("create message rate limiter: %w", err)
+	}
 
 	if err := users.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("ensure user indexes: %w", err)
@@ -145,6 +155,9 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	}
 	if err := outboxEvents.EnsureIndexes(ctx); err != nil {
 		return fmt.Errorf("ensure outbox indexes: %w", err)
+	}
+	if err := messageRateLimiter.EnsureIndexes(ctx); err != nil {
+		return fmt.Errorf("ensure message rate limit indexes: %w", err)
 	}
 
 	appClock := clock.NewSystemClock()
@@ -329,6 +342,7 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	}
 	createMessageHandler, err := chatshandler.NewCreateMessageHandler(
 		createMessageUseCase,
+		messageRateLimiter,
 		logger,
 	)
 	if err != nil {
