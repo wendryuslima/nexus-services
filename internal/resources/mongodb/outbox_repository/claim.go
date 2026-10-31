@@ -78,18 +78,10 @@ func (repository *Repository) ClaimNext(ctx context.Context, workerID string, le
 	}
 	now = now.UTC()
 	filter := bson.D{
-		{Key: "status", Value: bson.D{
-			{Key: "$in", Value: bson.A{statusPending, statusProcessing}},
-		}},
+		{Key: "status", Value: statusPending},
 		{Key: "published_at", Value: nil},
 		{Key: "next_attempt_at", Value: bson.D{
 			{Key: "$lte", Value: now},
-		}},
-		{Key: "$or", Value: bson.A{
-			bson.D{{Key: "locked_until", Value: nil}},
-			bson.D{{Key: "locked_until", Value: bson.D{
-				{Key: "$lte", Value: now},
-			}}},
 		}},
 	}
 	update := bson.D{

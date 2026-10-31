@@ -41,6 +41,10 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("load MongoDB configuration: %w", err)
 	}
+	outboxConfig, err := config.LoadOutboxConfig()
+	if err != nil {
+		return fmt.Errorf("load outbox configuration: %w", err)
+	}
 
 	natsURL := strings.TrimSpace(os.Getenv("NATS_URL"))
 	if natsURL == "" {
@@ -112,14 +116,24 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 
 	runner, err := outboxrunner.NewRunner(
 		step,
+		store,
+		clock.NewSystemClock(),
 		logger,
-		idleInterval,
-		errorInterval,
+		outboxrunner.Config{
+			Concurrency:       outboxConfig.Concurrency,
+			IdleInterval:      idleInterval,
+			ErrorInterval:     errorInterval,
+			RecoveryInterval:  outboxConfig.RecoveryInterval,
+			RecoveryBatchSize: outboxConfig.RecoveryBatchSize,
+		},
 	)
 	if err != nil {
 		return fmt.Errorf("create outbox runner: %w", err)
 	}
 
-	logger.Info("outbox publisher started", slog.String("worker_id", workerID))
+	logger.Info("outbox publisher started", slog.String("worker_id", workerID),
+		slog.Int("concurrency", outboxConfig.Concurrency),
+		slog.Duration("recovery_interval", outboxConfig.RecoveryInterval),
+		slog.Int("recovery_batch_size", outboxConfig.RecoveryBatchSize))
 	return runner.Run(ctx)
 }

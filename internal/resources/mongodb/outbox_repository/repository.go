@@ -10,9 +10,9 @@ import (
 )
 
 const (
-	outboxStatusScheduleIndexName = "outbox_status_schedule"
-	outboxLockedUntilIndexName    = "outbox_locked_until"
-	outboxPublishedAtIndexName    = "outbox_published_at"
+	outboxPendingScheduleIndexName  = "outbox_pending_schedule"
+	outboxProcessingExpiryIndexName = "outbox_processing_expiry"
+	outboxPublishedAtIndexName      = "outbox_published_at"
 )
 
 type Repository struct {
@@ -32,17 +32,20 @@ func (repository *Repository) EnsureIndexes(ctx context.Context) error {
 	indexes := []mongo.IndexModel{
 		{
 			Keys: bson.D{
-				{Key: "status", Value: 1},
 				{Key: "next_attempt_at", Value: 1},
 				{Key: "created_at", Value: 1},
+				{Key: "_id", Value: 1},
 			},
-			Options: options.Index().SetName(outboxStatusScheduleIndexName),
+			Options: options.Index().SetName(outboxPendingScheduleIndexName).
+				SetPartialFilterExpression(bson.D{{Key: "status", Value: statusPending}}),
 		},
 		{
 			Keys: bson.D{
 				{Key: "locked_until", Value: 1},
+				{Key: "_id", Value: 1},
 			},
-			Options: options.Index().SetName(outboxLockedUntilIndexName),
+			Options: options.Index().SetName(outboxProcessingExpiryIndexName).
+				SetPartialFilterExpression(bson.D{{Key: "status", Value: statusProcessing}}),
 		},
 		{
 			Keys: bson.D{

@@ -48,3 +48,7 @@ type OutboxStore interface {
 type EventPublisher interface {
 	Publish(ctx context.Context, event OutboxEvent) (PublishReceipt, error)
 }
+
+type OutboxLeaseRecoverer interface {
+	RecoverExpired(ctx context.Context, now time.Time, limit int) (int64, error)
+}

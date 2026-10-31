@@ -304,24 +304,36 @@ HTTP/1.1 201 Created
 
 ### 6.1 Reserva concorrente
 
-Pode haver várias instâncias do Outbox Publisher. Cada evento deve ser reservado atomicamente usando `findOneAndUpdate` ou operação equivalente:
+Pode haver várias instâncias do Outbox Publisher. Cada instância executa um conjunto limitado de goroutines, e cada goroutine reserva e publica um evento por vez. A reserva usa `findOneAndUpdate`:
 
 ```text
 Filtro:
-  status em [PENDING, PROCESSING]
+  status = PENDING
   published_at ausente
   next_attempt_at <= now
-  locked_until ausente ou < now
 
 Atualização:
   status = PROCESSING
   locked_by = instanceId
   locked_until = now + leaseDuration
+  lease_id = identificador único desta reserva
 ```
 
 A reserva deve ter prazo. Se uma instância cair, outra poderá processar o evento após `locked_until` expirar.
 
-Um evento em `PROCESSING` com lease expirado deve ser elegível para nova reserva. Alternativamente, uma rotina de recuperação pode devolvê-lo a `PENDING`; não use um filtro que considere apenas `PENDING`, pois isso deixaria eventos abandonados após a queda de um worker.
+Uma rotina independente roda na inicialização e periodicamente, mesmo com backlog contínuo. Ela busca um lote limitado de eventos `PROCESSING` não publicados com `locked_until <= now`, ordenados por `(locked_until, _id)`, e os devolve a `PENDING`, limpando os dados do lease. Cada atualização verifica novamente o status, a expiração e o `lease_id` observado na leitura, para não sobrescrever uma reserva mais recente nem um evento já publicado. A recuperação preserva `next_attempt_at` e não publica eventos diretamente.
+
+Todo evento `PENDING` está desbloqueado e não publicado: a inserção inicial, o retry e a recuperação mantêm essa regra. A reserva normal não precisa procurar leases expirados. A confirmação, o retry e a falha permanente verificam o `lease_id`, impedindo que um worker antigo finalize um evento reservado novamente.
+
+Configuração por instância:
+
+| Variável | Padrão | Limites |
+| --- | --- | --- |
+| `OUTBOX_CONCURRENCY` | `4` | 1 a 64 publicações simultâneas |
+| `OUTBOX_RECOVERY_INTERVAL` | `5s` | 100 ms a 5 minutos |
+| `OUTBOX_RECOVERY_BATCH_SIZE` | `100` | 1 a 1.000 eventos por execução |
+
+O shutdown cancela buscas e publicações e aguarda todas as goroutines, incluindo a recuperação. A finalização de uma publicação em andamento mantém seu orçamento próprio de 5 segundos. Uma falha aplica espera apenas à goroutine afetada. Não há load balancer entre publishers: as reservas atômicas distribuem o trabalho. A concorrência total é o número de instâncias multiplicado por `OUTBOX_CONCURRENCY`; aumente gradualmente enquanto mede o MongoDB e a idade da fila.
 
 ### 6.2 Publicação
 
@@ -339,7 +351,7 @@ A partição pode ser calculada por:
 hash(chatId) % totalPartitions
 ```
 
-Isso mantém mensagens do mesmo chat na mesma partição. Mesmo assim, a ordenação definitiva continua sendo o `sequence` persistido no banco.
+Isso mantém mensagens do mesmo chat na mesma partição. Mesmo assim, a ordenação definitiva continua sendo o `sequence` persistido no banco. Goroutines, instâncias e retries podem publicar eventos do mesmo chat fora de ordem; os consumidores devem deduplicar, ordenar por `sequence` e recuperar lacunas. A quantidade de partições do NATS não particiona a consulta MongoDB.
 
 ### 6.3 Confirmação
 
@@ -374,13 +386,15 @@ Não exclua automaticamente o evento depois de um número pequeno de falhas. Uma
 
 Eventos `PUBLISHED` podem ser removidos por uma rotina de retenção, por exemplo após 7 ou 30 dias. A remoção deve considerar as necessidades de auditoria e diagnóstico.
 
-Índices recomendados:
+Índices criados pelo publisher antes de iniciar as goroutines:
 
 ```text
-(status, next_attempt_at)
-(locked_until)
-(published_at) com TTL, se a política permitir
+(next_attempt_at, created_at, _id), parcial para status = PENDING
+(locked_until, _id), parcial para status = PROCESSING
+(published_at), sem TTL automático
 ```
+
+Os dois índices parciais atendem à ordenação completa das respectivas consultas. A atualização cria os novos índices com nomes próprios e preserva os índices antigos existentes (`outbox_status_schedule` e `outbox_locked_until`), permitindo coexistência durante o rollout. A remoção dos antigos pode ocorrer depois de todas as instâncias migrarem e da validação dos planos. Retenção ou TTL exige uma política explícita; não exclua eventos pendentes.
 
 ---
 

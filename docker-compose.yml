@@ -49,6 +49,10 @@ services:
      
       NATS_URL: "nats://nats:4222"
 
+      OUTBOX_CONCURRENCY: "${OUTBOX_CONCURRENCY:-4}"
+      OUTBOX_RECOVERY_INTERVAL: "${OUTBOX_RECOVERY_INTERVAL:-5s}"
+      OUTBOX_RECOVERY_BATCH_SIZE: "${OUTBOX_RECOVERY_BATCH_SIZE:-100}"
+
     read_only: true
     cap_drop:
       - ALL
