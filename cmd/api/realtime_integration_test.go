@@ -57,7 +57,14 @@ func TestRealtimeEndToEnd(t *testing.T) {
 	}
 	address := listener.Addr().String()
 	listener.Close()
+	imageEndpoint, imageAccessKey, imageSecretKey := os.Getenv("GARAGE_TEST_ENDPOINT"), os.Getenv("GARAGE_TEST_ACCESS_KEY_ID"), os.Getenv("GARAGE_TEST_SECRET_ACCESS_KEY")
+	if imageEndpoint == "" {
+		imageEndpoint = "http://localhost:3900"
+		imageAccessKey = "test-access-key"
+		imageSecretKey = "test-secret-key"
+	}
 	for key, value := range map[string]string{
+		"GARAGE_ENDPOINT": imageEndpoint, "GARAGE_PUBLIC_ENDPOINT": imageEndpoint, "GARAGE_ACCESS_KEY_ID": imageAccessKey, "GARAGE_SECRET_ACCESS_KEY": imageSecretKey, "GARAGE_BUCKET": "nexus-images",
 		"APP_ENV": "test", "MONGODB_URI": mongoURI, "MONGODB_DATABASE": dbName, "NATS_URL": natsURL,
 		"HTTP_ADDRESS": address, "HTTP_ALLOWED_ORIGINS": "http://localhost:5172", "AUTH_COOKIE_SECURE": "false", "AUTH_COOKIE_SAME_SITE": "lax",
 		"JWT_ISSUER": "nexus-test", "JWT_AUDIENCE": "nexus-web-test", "JWT_ACCESS_SECRET_BASE64": base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)), "JWT_REFRESH_SECRET_BASE64": base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{2}, 32)),
@@ -241,6 +248,9 @@ func TestRealtimeEndToEnd(t *testing.T) {
 	}
 	if err := json.Unmarshal(chatsRaw, &listed); err != nil || len(listed.Data) != 1 || listed.Data[0].LastSequence != 1 {
 		t.Fatal("chat list lost persisted high-water mark")
+	}
+	if os.Getenv("GARAGE_TEST_ENDPOINT") != "" {
+		e2eImageFlow(t, ctx, base, alice, bob, eve, chat.Data.ID, step, consumer, dispatcher, bobSocket, rawDB.Database(dbName))
 	}
 	e2eRequest(t, bob, "POST", base+"/v1/auth/logout", nil)
 	readCtx, stop := context.WithTimeout(ctx, 2*time.Second)

@@ -10,8 +10,10 @@ import (
 )
 
 type messageContentDocument struct {
-	Type  string `bson:"type"`
-	Value string `bson:"value"`
+	Type    string `bson:"type"`
+	Value   string `bson:"value,omitempty"`
+	ImageID string `bson:"image_id,omitempty"`
+	Caption string `bson:"caption,omitempty"`
 }
 
 type messageDocument struct {
@@ -98,10 +100,7 @@ func (document timelineItemDocument) toDomain() (*timeline.Item, error) {
 		)
 	}
 
-	content, err := timeline.NewMessageContent(
-		contentType,
-		document.Message.Content.Value,
-	)
+	content, err := timeline.RestoreContent(contentType, document.Message.Content.Value, document.Message.Content.ImageID, document.Message.Content.Caption)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"%w: restore content: %v",

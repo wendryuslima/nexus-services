@@ -61,8 +61,7 @@ func validateEvent(event ports.OutboxEvent) error {
 		payload.Sequence <= 0 ||
 		payload.Sequence > timeline.MaxSequence ||
 		payload.CreatedAt.IsZero() ||
-		payload.Content.Type != "TEXT" ||
-		strings.TrimSpace(payload.Content.Value) == "" {
+		!ports.ValidMessageContent(payload.Content) {
 		return ports.ErrInvalidOutboxEvent
 	}
 

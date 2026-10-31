@@ -3,14 +3,22 @@ package ports
 import (
 	"context"
 	"errors"
+	"github.com/wendryuslima/nexus-services/internal/domain/timeline"
 	"time"
 )
 
 var ErrInvalidOutboxEvent = errors.New("invalid outbox event")
 
 type OutboxContent struct {
-	Type  string `json:"type"`
-	Value string `json:"value"`
+	Type    string `json:"type"`
+	Value   string `json:"value,omitempty"`
+	ImageID string `json:"imageId,omitempty"`
+	Caption string `json:"caption,omitempty"`
+}
+
+func ValidMessageContent(content OutboxContent) bool {
+	_, err := timeline.RestoreContent(timeline.ContentType(content.Type), content.Value, content.ImageID, content.Caption)
+	return err == nil
 }
 
 type MessageCreatedPayload struct {

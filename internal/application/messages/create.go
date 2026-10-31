@@ -25,8 +25,10 @@ const (
 )
 
 type CreateContentInput struct {
-	Type  string
-	Value string
+	Type    string
+	Value   string
+	ImageID string
+	Caption string
 }
 
 type CreateInput struct {
@@ -37,8 +39,10 @@ type CreateInput struct {
 }
 
 type CreatedContent struct {
-	Type  string
-	Value string
+	Type    string
+	Value   string
+	ImageID string
+	Caption string
 }
 
 type CreateOutput struct {
@@ -239,6 +243,19 @@ func parseContent(
 	if !utf8.ValidString(input.Value) {
 		return timeline.MessageContent{}, ErrInvalidContent
 	}
+	if contentType == timeline.ContentTypeImage {
+		if input.Value != "" {
+			return timeline.MessageContent{}, ErrInvalidContent
+		}
+		content, err := timeline.NewImageContent(input.ImageID, input.Caption)
+		if err != nil {
+			return timeline.MessageContent{}, ErrInvalidContent
+		}
+		return content, nil
+	}
+	if input.ImageID != "" || input.Caption != "" {
+		return timeline.MessageContent{}, ErrInvalidContent
+	}
 
 	if utf8.RuneCountInString(input.Value) > maxTextMessageCharacters {
 		return timeline.MessageContent{}, ErrContentTooLong
@@ -343,7 +360,7 @@ func validateStoredItem(
 	expectedContent := expectedMessage.Content()
 
 	if storedContent.Type() != expectedContent.Type() ||
-		storedContent.Value() != expectedContent.Value() {
+		storedContent.Value() != expectedContent.Value() || storedContent.ImageID() != expectedContent.ImageID() || storedContent.Caption() != expectedContent.Caption() {
 		return errors.New(
 			"message store returned different message content",
 		)
@@ -367,7 +384,7 @@ func mapCreateOutput(
 		SenderID:        message.SenderID().String(),
 		Content: CreatedContent{
 			Type:  string(content.Type()),
-			Value: content.Value(),
+			Value: content.Value(), ImageID: content.ImageID(), Caption: content.Caption(),
 		},
 		CreatedAt:      item.CreatedAt(),
 		DeliveryStatus: DeliveryStatusPersisted,

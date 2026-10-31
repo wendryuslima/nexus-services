@@ -2,6 +2,30 @@ name: nexus
 
 services:
 
+  garage:
+    image: dxflrs/garage:v2.4.1
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    restart: unless-stopped
+    environment:
+      GARAGE_RPC_SECRET: "${GARAGE_RPC_SECRET:?GARAGE_RPC_SECRET is required}"
+      GARAGE_DEFAULT_ACCESS_KEY: "${GARAGE_ACCESS_KEY_ID:?GARAGE_ACCESS_KEY_ID is required}"
+      GARAGE_DEFAULT_SECRET_KEY: "${GARAGE_SECRET_ACCESS_KEY:?GARAGE_SECRET_ACCESS_KEY is required}"
+      GARAGE_DEFAULT_BUCKET: "${GARAGE_BUCKET:-nexus-images}"
+    volumes:
+      - ./deploy/garage.toml:/etc/garage.toml:ro
+      - garage_meta:/var/lib/garage/meta
+      - garage_data:/var/lib/garage/data
+    ports:
+      - "127.0.0.1:${GARAGE_PORT:-3900}:3900"
+    healthcheck:
+      test: ["CMD", "/garage", "status"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - backend
+
  
   nats:
     image: nats:2.15.0-alpine
@@ -98,6 +122,8 @@ services:
     restart: unless-stopped
 
     depends_on:
+      garage:
+        condition: service_healthy
       mongodb:
         condition: service_healthy
       nats:
@@ -107,6 +133,12 @@ services:
       - "${BACKEND_PORT:?BACKEND_PORT is required}:8080"
 
     environment:
+      GARAGE_ENDPOINT: "http://garage:3900"
+      GARAGE_PUBLIC_ENDPOINT: "${GARAGE_PUBLIC_ENDPOINT:?GARAGE_PUBLIC_ENDPOINT is required}"
+      GARAGE_REGION: "${GARAGE_REGION:-garage}"
+      GARAGE_BUCKET: "${GARAGE_BUCKET:-nexus-images}"
+      GARAGE_ACCESS_KEY_ID: "${GARAGE_ACCESS_KEY_ID:?GARAGE_ACCESS_KEY_ID is required}"
+      GARAGE_SECRET_ACCESS_KEY: "${GARAGE_SECRET_ACCESS_KEY:?GARAGE_SECRET_ACCESS_KEY is required}"
       HTTP_ADDRESS: "${HTTP_ADDRESS:?HTTP_ADDRESS is required}"
       HTTP_READ_HEADER_TIMEOUT: "${HTTP_READ_HEADER_TIMEOUT:?HTTP_READ_HEADER_TIMEOUT is required}"
       HTTP_READ_TIMEOUT: "${HTTP_READ_TIMEOUT:?HTTP_READ_TIMEOUT is required}"
@@ -153,7 +185,7 @@ services:
     read_only: true
 
     tmpfs:
-      - "/tmp:size=16m,noexec,nosuid"
+      - "/tmp:size=128m,noexec,nosuid"
 
     cap_drop:
       - ALL
@@ -230,6 +262,8 @@ services:
       - backend
 
 volumes:
+  garage_meta:
+  garage_data:
   mongodb_data:
   mongodb_keyfile:
   nats_data:

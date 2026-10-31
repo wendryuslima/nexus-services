@@ -35,8 +35,10 @@ type ListInput struct {
 }
 
 type ListedContent struct {
-	Type  string
-	Value string
+	Type    string
+	Value   string
+	ImageID string
+	Caption string
 }
 
 type ListedMessage struct {
@@ -171,7 +173,7 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 				ClientMessageID: message.ClientMessageID().String(),
 				SenderID:        message.SenderID().String(),
 				IsMine:          message.SenderID().String() == currentUserID.String(),
-				Content:         ListedContent{Type: string(content.Type()), Value: content.Value()},
+				Content:         ListedContent{Type: string(content.Type()), Value: content.Value(), ImageID: content.ImageID(), Caption: content.Caption()},
 			},
 		})
 	}

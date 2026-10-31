@@ -11,7 +11,7 @@ func ValidRealtimeUserID(id string) bool {
 
 func ValidateRealtimeMessage(event RealtimeMessageCreated) error {
 	data := event.Data
-	if event.Version != RealtimeProtocolVersion || event.Type != RealtimeMessageCreatedType || strings.TrimSpace(event.EventID) == "" || event.OccurredAt.IsZero() || strings.TrimSpace(data.ID) == "" || strings.TrimSpace(data.ChatID) == "" || !ValidRealtimeUserID(data.SenderID) || data.Sequence <= 0 || data.Sequence > timeline.MaxSequence || data.CreatedAt.IsZero() || data.Content.Type != "TEXT" || strings.TrimSpace(data.Content.Value) == "" {
+	if event.Version != RealtimeProtocolVersion || event.Type != RealtimeMessageCreatedType || strings.TrimSpace(event.EventID) == "" || event.OccurredAt.IsZero() || strings.TrimSpace(data.ID) == "" || strings.TrimSpace(data.ChatID) == "" || !ValidRealtimeUserID(data.SenderID) || data.Sequence <= 0 || data.Sequence > timeline.MaxSequence || data.CreatedAt.IsZero() || !ValidMessageContent(data.Content) {
 		return ErrInvalidMessageCreatedEvent
 	}
 	if data.ClientMessageID != "" {

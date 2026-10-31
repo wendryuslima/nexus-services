@@ -21,6 +21,7 @@ type Repository struct {
 	chatCollection     *mongo.Collection
 	timelineCollection *mongo.Collection
 	outboxCollection   *mongo.Collection
+	imagesCollection   *mongo.Collection
 }
 
 func NewRepository(
@@ -28,6 +29,7 @@ func NewRepository(
 	chatsCollection *mongo.Collection,
 	timelineCollection *mongo.Collection,
 	outboxCollection *mongo.Collection,
+	imagesCollection ...*mongo.Collection,
 ) (*Repository, error) {
 	if transactions == nil {
 		return nil, ErrNilTransactionRunner
@@ -45,10 +47,15 @@ func NewRepository(
 		return nil, ErrNilOutboxCollection
 	}
 
+	var images *mongo.Collection
+	if len(imagesCollection) > 0 {
+		images = imagesCollection[0]
+	}
 	return &Repository{
 		transactions:       transactions,
 		chatCollection:     chatsCollection,
 		timelineCollection: timelineCollection,
 		outboxCollection:   outboxCollection,
+		imagesCollection:   images,
 	}, nil
 }

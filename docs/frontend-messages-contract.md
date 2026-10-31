@@ -47,8 +47,12 @@ O backend retorna o mesmo `404 chat_not_found` tanto para um chat inexistente qu
 | --- | --- | --- | --- |
 | `clientMessageId` | string | Sim | UUID canônico, diferente do UUID nulo. Deve ser gerado uma vez pelo cliente e reutilizado em retries da mesma mensagem. |
 | `content` | object | Sim | Conteúdo da mensagem. |
-| `content.type` | string | Sim | Atualmente somente `TEXT`. |
-| `content.value` | string | Sim | Texto UTF-8 não vazio, com no máximo 4.000 caracteres Unicode. |
+| `content.type` | string | Sim | `TEXT` ou `IMAGE`. |
+| `content.value` | string | Para `TEXT` | Texto UTF-8 não vazio, com no máximo 4.000 caracteres Unicode. |
+| `content.imageId` | string | Para `IMAGE` | ID de upload pronto, do remetente e desta conversa. |
+| `content.caption` | string | Não | Legenda de `IMAGE`, até 4.000 caracteres Unicode. |
+
+Envie os bytes previamente por `POST /v1/images`. Veja o [contrato de imagens](images.md) para upload, leitura e retries. `IMAGE` não aceita `value`; `TEXT` não aceita `imageId` ou `caption`.
 
 Não envie `senderId`, `recipientId`, `sequence`, `createdAt` nem qualquer identificador de usuário. O remetente é sempre extraído da sessão autenticada.
 
@@ -121,8 +125,10 @@ O frontend deve tratar `200` e `201` como sucesso. A notificação `message.crea
 | `data.chatId` | string | ID do chat. |
 | `data.sequence` | integer | Ordem crescente e estável da mensagem dentro do chat. |
 | `data.senderId` | string | ID do remetente autenticado. |
-| `data.content.type` | string | Tipo do conteúdo, atualmente `TEXT`. |
-| `data.content.value` | string | Texto persistido. |
+| `data.content.type` | string | `TEXT` ou `IMAGE`. |
+| `data.content.value` | string | Texto persistido de `TEXT`. |
+| `data.content.imageId` | string | Referência persistida de `IMAGE`. |
+| `data.content.caption` | string | Legenda opcional de `IMAGE`. |
 | `data.createdAt` | string | Data RFC 3339 em UTC. |
 | `data.deliveryStatus` | string | Estado visível ao remetente. Atualmente sempre `PERSISTED`. |
 
@@ -178,7 +184,8 @@ O frontend deve tomar decisões por `error.code`. O texto de `error.message` é 
 | `413` | `request_body_too_large` | Corpo acima de 20 KiB. |
 | `415` | `unsupported_media_type` | `Content-Type` diferente de `application/json`. |
 | `422` | `invalid_client_message_id` | `clientMessageId` ausente ou inválido. |
-| `422` | `invalid_message_content` | Tipo ou valor do conteúdo inválido. |
+| `409` | `image_unavailable` | Imagem inexistente, expirada, já vinculada ou sem permissão para esta mensagem. |
+| `422` | `invalid_message_content` | Tipo, valor ou formato do conteúdo inválido. |
 | `422` | `message_content_too_long` | Texto acima de 4.000 caracteres Unicode. |
 | `429` | `message_rate_limit_exceeded` | Limite de envio por usuário atingido. Aguarde o prazo de `Retry-After`. |
 | `503` | `message_rate_limit_unavailable` | Controle de frequência indisponível. Tente novamente após `Retry-After`. |
@@ -255,7 +262,7 @@ export async function createMessage(
 Este contrato ainda não define:
 
 - edição ou exclusão de mensagens;
-- anexos e outros tipos de conteúdo;
+- outros anexos além de imagens JPEG/PNG;
 - recibos de entrega ou leitura;
 
 A sincronização incremental está disponível no [contrato da timeline](frontend-timeline-contract.md). A notificação `message.created` é entregue a ambos os participantes via WebSocket, incluindo as outras abas do remetente. O envio permanece HTTP e `PERSISTED` continua significando somente persistência confirmada.

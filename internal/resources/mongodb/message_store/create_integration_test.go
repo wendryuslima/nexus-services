@@ -123,6 +123,7 @@ func TestCreateWithOutboxRollsBackWhenTheOutboxInsertFails(t *testing.T) {
 }
 
 type messageStoreIntegrationCollections struct {
+	images   *mongo.Collection
 	chats    *mongo.Collection
 	timeline *mongo.Collection
 	outbox   *mongo.Collection
@@ -169,7 +170,11 @@ func newMessageStoreIntegrationFixture(
 		t.Fatalf("create timeline indexes: %v", err)
 	}
 
-	store, err := NewRepository(client, collections.chats, collections.timeline, collections.outbox)
+	collections.images, err = client.Collection("images")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewRepository(client, collections.chats, collections.timeline, collections.outbox, collections.images)
 	if err != nil {
 		t.Fatalf("create message store: %v", err)
 	}
@@ -177,7 +182,7 @@ func newMessageStoreIntegrationFixture(
 	cleanup := func() {
 		cleanupContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		for _, collection := range []*mongo.Collection{collections.chats, collections.timeline, collections.outbox} {
+		for _, collection := range []*mongo.Collection{collections.chats, collections.timeline, collections.outbox, collections.images} {
 			if _, err := collection.DeleteMany(cleanupContext, bson.D{}); err != nil {
 				t.Errorf("clean %s collection: %v", collection.Name(), err)
 			}

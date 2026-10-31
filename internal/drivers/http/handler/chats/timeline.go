@@ -51,8 +51,10 @@ type timelineMessageResponse struct {
 }
 
 type timelineContentResponse struct {
-	Type  string `json:"type"`
-	Value string `json:"value"`
+	Type    string `json:"type"`
+	Value   string `json:"value,omitempty"`
+	ImageID string `json:"imageId,omitempty"`
+	Caption string `json:"caption,omitempty"`
 }
 
 type timelinePaginationResponse struct {
@@ -196,7 +198,7 @@ func mapTimelineResponse(output applicationtimeline.ListOutput) timelineResponse
 			Message: timelineMessageResponse{
 				ClientMessageID: item.Message.ClientMessageID,
 				SenderID:        item.Message.SenderID, IsMine: item.Message.IsMine,
-				Content: timelineContentResponse{Type: item.Message.Content.Type, Value: item.Message.Content.Value},
+				Content: timelineContentResponse{Type: item.Message.Content.Type, Value: item.Message.Content.Value, ImageID: item.Message.Content.ImageID, Caption: item.Message.Content.Caption},
 			},
 		})
 	}

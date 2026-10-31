@@ -19,8 +19,10 @@ const (
 )
 
 type messageContentDocument struct {
-	Type  string `bson:"type"`
-	Value string `bson:"value"`
+	Type    string `bson:"type"`
+	Value   string `bson:"value,omitempty"`
+	ImageID string `bson:"image_id,omitempty"`
+	Caption string `bson:"caption,omitempty"`
 }
 
 type messageDocument struct {
@@ -40,8 +42,10 @@ type timelineItemDocument struct {
 }
 
 type eventContentDocument struct {
-	Type  string `bson:"type" json:"type"`
-	Value string `bson:"value" json:"value"`
+	Type    string `bson:"type" json:"type"`
+	Value   string `bson:"value,omitempty" json:"value,omitempty"`
+	ImageID string `bson:"imageId,omitempty" json:"imageId,omitempty"`
+	Caption string `bson:"caption,omitempty" json:"caption,omitempty"`
 }
 
 type messageCreatedPayloadDocument struct {
@@ -91,7 +95,7 @@ func newTimelineItemDocument(
 			SenderID:        message.SenderID().String(),
 			Content: messageContentDocument{
 				Type:  string(content.Type()),
-				Value: content.Value(),
+				Value: content.Value(), ImageID: content.ImageID(), Caption: content.Caption(),
 			},
 		},
 	}
@@ -122,7 +126,7 @@ func newOutboxEventDocument(
 			SenderID: message.SenderID().String(),
 			Content: eventContentDocument{
 				Type:  string(content.Type()),
-				Value: content.Value(),
+				Value: content.Value(), ImageID: content.ImageID(), Caption: content.Caption(),
 			},
 			CreatedAt: createdAt,
 		},
@@ -207,10 +211,7 @@ func (document timelineItemDocument) toDomain() (*timeline.Item, error) {
 		)
 	}
 
-	content, err := timeline.NewMessageContent(
-		contentType,
-		document.Message.Content.Value,
-	)
+	content, err := timeline.RestoreContent(contentType, document.Message.Content.Value, document.Message.Content.ImageID, document.Message.Content.Caption)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"%w: restore content: %v",

@@ -43,8 +43,7 @@ func validateMessageCreated(event ports.MessageCreatedEvent) error {
 		payload.Sequence <= 0 ||
 		payload.Sequence > timeline.MaxSequence ||
 		payload.CreatedAt.IsZero() ||
-		payload.Content.Type != "TEXT" ||
-		strings.TrimSpace(payload.Content.Value) == "" {
+		!ports.ValidMessageContent(payload.Content) {
 		return ports.ErrInvalidMessageCreatedEvent
 	}
 	if payload.ClientMessageID != "" {

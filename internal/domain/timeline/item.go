@@ -3,6 +3,7 @@ package timeline
 import (
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wendryuslima/nexus-services/internal/domain/chat"
 	"github.com/wendryuslima/nexus-services/internal/domain/user"
@@ -43,12 +44,13 @@ func ParseKind(rawKind string) (Kind, error) {
 type ContentType string
 
 const (
-	ContentTypeText ContentType = "TEXT"
+	ContentTypeText  ContentType = "TEXT"
+	ContentTypeImage ContentType = "IMAGE"
 )
 
 func ParseContentType(rawType string) (ContentType, error) {
 	contentType := ContentType(strings.ToUpper(strings.TrimSpace(rawType)))
-	if contentType != ContentTypeText {
+	if contentType != ContentTypeText && contentType != ContentTypeImage {
 		return "", ErrInvalidContentType
 	}
 
@@ -58,6 +60,39 @@ func ParseContentType(rawType string) (ContentType, error) {
 type MessageContent struct {
 	contentType ContentType
 	value       string
+	imageID     string
+	caption     string
+}
+
+func NewImageContent(imageID, caption string) (MessageContent, error) {
+	if strings.TrimSpace(imageID) == "" || strings.TrimSpace(imageID) != imageID || len(imageID) > 128 || !utf8.ValidString(caption) || utf8.RuneCountInString(caption) > 4000 {
+		return MessageContent{}, ErrInvalidContent
+	}
+	return MessageContent{contentType: ContentTypeImage, imageID: imageID, caption: caption}, nil
+}
+
+func RestoreContent(kind ContentType, value, imageID, caption string) (MessageContent, error) {
+	switch kind {
+	case ContentTypeText:
+		if imageID != "" || caption != "" {
+			return MessageContent{}, ErrInvalidContent
+		}
+		return NewMessageContent(kind, value)
+	case ContentTypeImage:
+		if value != "" {
+			return MessageContent{}, ErrInvalidContent
+		}
+		return NewImageContent(imageID, caption)
+	default:
+		return MessageContent{}, ErrInvalidContentType
+	}
+}
+
+func (content MessageContent) ImageID() string { return content.imageID }
+func (content MessageContent) Caption() string { return content.caption }
+func (content MessageContent) Valid() bool {
+	_, err := RestoreContent(content.contentType, content.value, content.imageID, content.caption)
+	return err == nil
 }
 
 func NewMessageContent(
@@ -105,8 +140,7 @@ func NewMessage(
 		return Message{}, ErrInvalidSenderID
 	}
 
-	if content.Type() != ContentTypeText ||
-		strings.TrimSpace(content.Value()) == "" {
+	if !content.Valid() {
 		return Message{}, ErrInvalidContent
 	}
 
@@ -175,8 +209,7 @@ func RestoreMessage(
 		return nil, ErrInvalidSenderID
 	}
 
-	if message.Content().Type() != ContentTypeText ||
-		strings.TrimSpace(message.Content().Value()) == "" {
+	if !message.Content().Valid() {
 		return nil, ErrInvalidContent
 	}
 

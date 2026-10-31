@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/wendryuslima/nexus-services/internal/domain/image"
 	"strings"
 
 	"github.com/wendryuslima/nexus-services/internal/domain/timeline"
@@ -43,7 +44,7 @@ func (repository *Repository) CreateWithOutbox(
 	sequence, err := repository.createTransaction(ctx, params)
 	if err != nil {
 
-		if mongo.IsDuplicateKeyError(err) {
+		if mongo.IsDuplicateKeyError(err) || errors.Is(err, ports.ErrImageUnavailable) {
 			existingItem, found, lookupErr :=
 				repository.findExistingMessage(ctx, params)
 			if lookupErr != nil {
@@ -137,8 +138,7 @@ func validateCreateParams(
 	}
 
 	content := message.Content()
-	if content.Type() != timeline.ContentTypeText ||
-		strings.TrimSpace(content.Value()) == "" {
+	if !content.Valid() {
 		return fmt.Errorf(
 			"%w: message content is invalid",
 			ErrInvalidCreateParams,
@@ -236,7 +236,7 @@ func sameLogicalMessage(
 	requestedContent := requestedMessage.Content()
 
 	return existingContent.Type() == requestedContent.Type() &&
-		existingContent.Value() == requestedContent.Value()
+		existingContent.Value() == requestedContent.Value() && existingContent.ImageID() == requestedContent.ImageID() && existingContent.Caption() == requestedContent.Caption()
 }
 
 func (repository *Repository) createTransaction(
@@ -248,6 +248,20 @@ func (repository *Repository) createTransaction(
 	err := repository.transactions.RunInTransaction(
 		ctx,
 		func(transactionContext context.Context) error {
+			if params.Message.Content().Type() == timeline.ContentTypeImage {
+				if repository.imagesCollection == nil {
+					return errors.New("images collection is required for image messages")
+				}
+				result, err := repository.imagesCollection.UpdateOne(transactionContext, bson.M{
+					"_id": params.Message.Content().ImageID(), "uploaded_by": params.Message.SenderID().String(), "chat_id": params.ChatID.String(), "status": image.Ready, "expires_at": bson.M{"$gt": params.CreatedAt},
+				}, bson.M{"$set": bson.M{"status": image.Attached, "message_id": params.MessageID.String()}})
+				if err != nil {
+					return err
+				}
+				if result.ModifiedCount != 1 {
+					return ports.ErrImageUnavailable
+				}
+			}
 			sequence, err := repository.allocateSequence(
 				transactionContext,
 				params,

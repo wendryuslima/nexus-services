@@ -1,5 +1,9 @@
 # Contrato HTTP — Timeline do chat
 
+O conteúdo de uma mensagem pode ser `TEXT` (`value`) ou `IMAGE` (`imageId` e
+`caption` opcional). Os exemplos de texto abaixo continuam válidos. URLs de
+imagem são obtidas separadamente; veja o [contrato de imagens](images.md).
+
 ## Listar a timeline
 
 ```http

@@ -19,8 +19,10 @@ const (
 )
 
 type claimedContentDocument struct {
-	Type  string `bson:"type"`
-	Value string `bson:"value"`
+	Type    string `bson:"type"`
+	Value   string `bson:"value"`
+	ImageID string `bson:"imageId"`
+	Caption string `bson:"caption"`
 }
 
 type claimedPayloadDocument struct {
@@ -63,7 +65,7 @@ func (document claimedEventDocument) toPort() *ports.OutboxEvent {
 			CreatedAt: document.Payload.CreatedAt,
 			Content: ports.OutboxContent{
 				Type:  document.Payload.Content.Type,
-				Value: document.Payload.Content.Value,
+				Value: document.Payload.Content.Value, ImageID: document.Payload.Content.ImageID, Caption: document.Payload.Content.Caption,
 			},
 		},
 	}

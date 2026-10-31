@@ -30,8 +30,10 @@ type CreateMessageExecutor interface {
 }
 
 type createMessageContentRequest struct {
-	Type  string `json:"type"`
-	Value string `json:"value"`
+	Type    string `json:"type"`
+	Value   string `json:"value,omitempty"`
+	ImageID string `json:"imageId,omitempty"`
+	Caption string `json:"caption,omitempty"`
 }
 
 type createMessageRequest struct {
@@ -55,8 +57,10 @@ type createMessageResponseData struct {
 }
 
 type createMessageContentResponse struct {
-	Type  string `json:"type"`
-	Value string `json:"value"`
+	Type    string `json:"type"`
+	Value   string `json:"value,omitempty"`
+	ImageID string `json:"imageId,omitempty"`
+	Caption string `json:"caption,omitempty"`
 }
 
 type CreateMessageHandler struct {
@@ -150,7 +154,7 @@ func (handler *CreateMessageHandler) ServeHTTP(
 			ClientMessageID: body.ClientMessageID,
 			Content: applicationmessages.CreateContentInput{
 				Type:  body.Content.Type,
-				Value: body.Content.Value,
+				Value: body.Content.Value, ImageID: body.Content.ImageID, Caption: body.Content.Caption,
 			},
 		},
 	)
@@ -220,7 +224,7 @@ func mapCreateMessageResponse(output applicationmessages.CreateOutput) createMes
 			SenderID:        output.SenderID,
 			Content: createMessageContentResponse{
 				Type:  output.Content.Type,
-				Value: output.Content.Value,
+				Value: output.Content.Value, ImageID: output.Content.ImageID, Caption: output.Content.Caption,
 			},
 			CreatedAt:      output.CreatedAt,
 			DeliveryStatus: string(output.DeliveryStatus),
@@ -234,6 +238,8 @@ func (handler *CreateMessageHandler) handleUseCaseError(
 	err error,
 ) {
 	switch {
+	case errors.Is(err, ports.ErrImageUnavailable):
+		writePublicError(handler.logger, writer, http.StatusConflict, "image_unavailable", "A imagem não está disponível para esta conversa. Selecione a imagem novamente.")
 	case errors.Is(err, applicationmessages.ErrInvalidCurrentUserID):
 		writePublicError(
 			handler.logger,

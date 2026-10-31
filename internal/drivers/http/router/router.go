@@ -75,6 +75,7 @@ func New(
 	authHandlers AuthHandlers,
 	userHandlers UsersHandlers,
 	chatHandlers ChatsHandlers,
+	imagesHandler http.Handler,
 	browserSecurity BrowserSecurity,
 	authentication Authentication,
 	logger *slog.Logger,
@@ -181,6 +182,18 @@ func New(
 	}
 
 	rootRouter := http.NewServeMux()
+	if imagesHandler != nil {
+		authenticated, err := authentication.Wrap(imagesHandler)
+		if err != nil {
+			return nil, err
+		}
+		protected, err := browserSecurity.Wrap(authenticated)
+		if err != nil {
+			return nil, err
+		}
+		rootRouter.Handle("/v1/images", protected)
+		rootRouter.Handle("/v1/images/", protected)
+	}
 	if len(realtimeHandlers) > 0 && realtimeHandlers[0] != nil {
 		authenticated, err := authentication.Wrap(realtimeHandlers[0])
 		if err != nil {

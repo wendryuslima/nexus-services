@@ -13,23 +13,28 @@ import (
 
 	applicationauth "github.com/wendryuslima/nexus-services/internal/application/auth"
 	applicationchats "github.com/wendryuslima/nexus-services/internal/application/chats"
+	applicationimages "github.com/wendryuslima/nexus-services/internal/application/images"
 	applicationmessages "github.com/wendryuslima/nexus-services/internal/application/messages"
 	applicationtimeline "github.com/wendryuslima/nexus-services/internal/application/timeline"
 	applicationusers "github.com/wendryuslima/nexus-services/internal/application/users"
 	authcookie "github.com/wendryuslima/nexus-services/internal/drivers/http/auth_cookie"
 	authhandler "github.com/wendryuslima/nexus-services/internal/drivers/http/handler/auth"
 	chatshandler "github.com/wendryuslima/nexus-services/internal/drivers/http/handler/chats"
+	imageshandler "github.com/wendryuslima/nexus-services/internal/drivers/http/handler/images"
 	usershandler "github.com/wendryuslima/nexus-services/internal/drivers/http/handler/users"
 	authenticationmiddleware "github.com/wendryuslima/nexus-services/internal/drivers/http/middleware/authentication"
 	browsersecurity "github.com/wendryuslima/nexus-services/internal/drivers/http/middleware/browser_security"
 	recoverymiddleware "github.com/wendryuslima/nexus-services/internal/drivers/http/middleware/recovery"
 	httprouter "github.com/wendryuslima/nexus-services/internal/drivers/http/router"
 	httpserver "github.com/wendryuslima/nexus-services/internal/drivers/http/server"
+	imagecleanup "github.com/wendryuslima/nexus-services/internal/drivers/worker/image_cleanup"
 	"github.com/wendryuslima/nexus-services/internal/resources/clock"
 	"github.com/wendryuslima/nexus-services/internal/resources/config"
+	"github.com/wendryuslima/nexus-services/internal/resources/garage"
 	"github.com/wendryuslima/nexus-services/internal/resources/identifier"
 	"github.com/wendryuslima/nexus-services/internal/resources/mongodb"
 	chatrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/chat_repository"
+	imagerepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/image_repository"
 	messageratelimiter "github.com/wendryuslima/nexus-services/internal/resources/mongodb/message_rate_limiter"
 	messagestore "github.com/wendryuslima/nexus-services/internal/resources/mongodb/message_store"
 	outboxrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/outbox_repository"
@@ -99,6 +104,21 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("get message rate limits collection: %w", err)
 	}
+	imagesCollection, err := mongoClient.Collection("images")
+	if err != nil {
+		return err
+	}
+	images, err := imagerepository.New(imagesCollection)
+	if err != nil {
+		return err
+	}
+	if err := images.EnsureIndexes(ctx); err != nil {
+		return fmt.Errorf("ensure image indexes: %w", err)
+	}
+	imageStorage, err := garage.New(configs.images)
+	if err != nil {
+		return fmt.Errorf("create Garage storage: %w", err)
+	}
 
 	users, err := userrepository.NewRepository(usersCollection)
 	if err != nil {
@@ -129,6 +149,7 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 		chatsCollection,
 		timelineCollection,
 		outboxCollection,
+		imagesCollection,
 	)
 	if err != nil {
 		return fmt.Errorf("create message store: %w", err)
@@ -162,6 +183,14 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 
 	appClock := clock.NewSystemClock()
 	ids := identifier.NewUUIDGenerator()
+	imageService, err := applicationimages.New(images, imageStorage, chats, ids, appClock, configs.images.Bucket)
+	if err != nil {
+		return err
+	}
+	imagesHandler, err := imageshandler.New(imageService, messageRateLimiter, logger)
+	if err != nil {
+		return err
+	}
 
 	passwordHasher, err := argon2id.NewHasher(argon2id.DefaultParameters())
 	if err != nil {
@@ -378,6 +407,7 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 			CreateMessage: createMessageHandler,
 			Timeline:      timelineHandler,
 		},
+		imagesHandler,
 		browserMiddleware,
 		authenticationMiddleware,
 		logger,
@@ -403,6 +433,10 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 		return fmt.Errorf("create HTTP server: %w", err)
 	}
 
+	cleanupCtx, cancelCleanup := context.WithCancel(ctx)
+	cleanupDone := make(chan struct{})
+	go func() { defer close(cleanupDone); imagecleanup.Run(cleanupCtx, imageService, logger) }()
+	defer func() { cancelCleanup(); <-cleanupDone }()
 	serverCtx, cancelServer := context.WithCancel(context.Background())
 	defer cancelServer()
 	serverDone := make(chan error, 1)
@@ -427,6 +461,7 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 }
 
 type applicationConfig struct {
+	images         config.ImagesConfig
 	realtime       config.RealtimeConfig
 	mongoDB        config.MongoDBConfig
 	auth           config.AuthConfig
@@ -459,7 +494,11 @@ func loadConfiguration() (applicationConfig, error) {
 	if err != nil {
 		return applicationConfig{}, err
 	}
-	return applicationConfig{realtime: realtimeConfig, mongoDB: mongoConfig, auth: authConfig, http: httpConfig, allowedOrigins: allowedOrigins}, nil
+	imagesConfig, err := config.LoadImagesConfig()
+	if err != nil {
+		return applicationConfig{}, fmt.Errorf("load image configuration: %w", err)
+	}
+	return applicationConfig{images: imagesConfig, realtime: realtimeConfig, mongoDB: mongoConfig, auth: authConfig, http: httpConfig, allowedOrigins: allowedOrigins}, nil
 }
 
 func authCookieConfig(cookieConfig config.CookieConfig) authcookie.Config {
