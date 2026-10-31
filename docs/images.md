@@ -25,7 +25,7 @@ chave e o bucket privado na primeira inicialização.
 | --- | --- |
 | `GARAGE_ENDPOINT` | Endpoint S3 usado pelo backend; `http://localhost:3900` fora do Docker. No Compose, `http://garage:3900`. |
 | `GARAGE_PUBLIC_ENDPOINT` | Origem alcançável pelo navegador, usada na assinatura. Local: `http://localhost:3900`. HTTPS obrigatório com `APP_ENV=production`. |
-| `GARAGE_REGION` | `garage`, igual à região em `deploy/garage.toml`. |
+| `GARAGE_REGION` | `garage`, igual à região em `garage.toml`. |
 | `GARAGE_BUCKET` | `nexus-images` por padrão. |
 | `GARAGE_ACCESS_KEY_ID` / `GARAGE_SECRET_ACCESS_KEY` | Credenciais S3 do backend e da configuração inicial do Garage. |
 | `GARAGE_RPC_SECRET` | Segredo hexadecimal de 32 bytes usado pelo Garage. |
