@@ -43,6 +43,10 @@ func (repository *Repository) EnsureIndexes(
 ) error {
 	indexes := []mongo.IndexModel{
 		{
+			Keys:    bson.D{{Key: "chat_id", Value: 1}, {Key: "search_words", Value: 1}, {Key: "sequence", Value: -1}},
+			Options: options.Index().SetName("timeline_chat_word_sequence"),
+		},
+		{
 			Keys: bson.D{
 				{Key: "chat_id", Value: 1},
 				{Key: "created_at", Value: -1},

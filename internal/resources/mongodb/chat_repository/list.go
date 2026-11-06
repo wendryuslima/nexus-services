@@ -21,14 +21,23 @@ func (repository *Repository) ListByParticipant(ctx context.Context, params port
 			Value: params.ParticipantID.String(),
 		},
 	}
-	totalItems, err := repository.collection.CountDocuments(ctx, baseFilter)
+	var totalItems int64
+	var err error
+	if len(params.SearchWords) == 0 {
+		totalItems, err = repository.collection.CountDocuments(ctx, baseFilter)
+	}
 	if err != nil {
 		return ports.ListChatsResult{}, fmt.Errorf("count chat documents by participant: %w ", err)
 
 	}
 	filter := buildListChatsFilter(params)
+	sortField := "summary_sort_at"
+	if len(params.SearchWords) > 0 {
+		filter = searchChatsFilter(params)
+		sortField = "created_at"
+	}
 	findOptions := options.Find().SetSort(bson.D{
-		{Key: "summary_sort_at", Value: -1},
+		{Key: sortField, Value: -1},
 		{Key: "_id", Value: -1},
 	}).
 		SetLimit(int64(params.Limit) + 1)
@@ -59,7 +68,11 @@ func (repository *Repository) ListByParticipant(ctx context.Context, params port
 			err)
 	}
 
-	return buildListChatResult(conversations, params.Limit, totalItems), nil
+	result := buildListChatResult(conversations, params.Limit, totalItems)
+	if len(params.SearchWords) > 0 && result.NextCursor != nil {
+		result.NextCursor.SummarySortAt = result.Chats[len(result.Chats)-1].CreatedAt()
+	}
+	return result, nil
 }
 
 func validateListChatParams(params ports.ListChatsParams) error {

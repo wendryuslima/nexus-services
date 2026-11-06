@@ -19,6 +19,9 @@ func (repository *Repository) GetOrCreateDirect(
 	if err != nil {
 		return nil, false, err
 	}
+	if err := repository.populateSearchWords(ctx, &candidateDocument); err != nil {
+		return nil, false, err
+	}
 
 	filter := directParticipantsFilter(
 		candidateDocument.ParticipantOneID,

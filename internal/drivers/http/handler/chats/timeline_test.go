@@ -19,3 +19,22 @@ func TestTimelineRejectsIncompatibleAndUnsafePagination(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchAndContextPaginationValidation(t *testing.T) {
+	for _, raw := range []string{
+		"q=contrato", "order=sequence&q=contrato&q=outro", "order=sequence&q=contrato&afterSequence=1",
+		"aroundSequence=1", "order=sequence&aroundSequence=0", "order=sequence&aroundSequence=1&beforeSequence=2",
+		"order=sequence&aroundSequence=1&throughSequence=5", "order=sequence&aroundSequence=1&q=contrato",
+	} {
+		query, _ := url.ParseQuery(raw)
+		if _, err := parseTimelineInput(query, "user-1", "chat-1"); err == nil {
+			t.Errorf("accepted %s", raw)
+		}
+	}
+	for _, raw := range []string{"order=sequence&q=contrato", "order=sequence&q=contrato&beforeSequence=100&throughSequence=1000", "order=sequence&aroundSequence=100&pageSize=51"} {
+		query, _ := url.ParseQuery(raw)
+		if _, err := parseTimelineInput(query, "user-1", "chat-1"); err != nil {
+			t.Errorf("rejected %s: %v", raw, err)
+		}
+	}
+}

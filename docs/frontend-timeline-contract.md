@@ -1,5 +1,8 @@
 # Contrato HTTP — Timeline do chat
 
+Pesquisa por palavras completas, snapshots dos resultados e navegação ao redor de
+uma mensagem estão descritas no [contrato de pesquisa](search.md).
+
 O conteúdo de uma mensagem pode ser `TEXT` (`value`) ou `IMAGE` (`imageId` e
 `caption` opcional). Os exemplos de texto abaixo continuam válidos. URLs de
 imagem são obtidas separadamente; veja o [contrato de imagens](images.md).

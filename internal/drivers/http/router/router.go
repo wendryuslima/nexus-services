@@ -167,6 +167,7 @@ func New(
 
 	chatsRouter := http.NewServeMux()
 	chatsRouter.Handle(chatsPath, chatHandlers.List)
+	chatsRouter.Handle("/v1/chats/{chatId}", chatHandlers.List)
 	chatsRouter.Handle(directChatsPath, chatHandlers.CreateDirect)
 	chatsRouter.Handle(chatMessagesPath, chatHandlers.CreateMessage)
 	chatsRouter.Handle(chatsPrefix, chatHandlers.Timeline)

@@ -2,11 +2,13 @@ package chats
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/wendryuslima/nexus-services/internal/domain/chat"
+	"github.com/wendryuslima/nexus-services/internal/domain/search"
 	"github.com/wendryuslima/nexus-services/internal/domain/user"
 	"github.com/wendryuslima/nexus-services/internal/ports"
 )
@@ -22,6 +24,8 @@ type ListCursorInput struct {
 }
 
 type ListInput struct {
+	Query         string
+	ChatID        string
 	CurrentUserID string
 	Page          int
 	PageSize      int
@@ -53,8 +57,9 @@ type ListPaginationOutput struct {
 }
 
 type ListOutput struct {
-	Chats      []ListedChat
-	Pagination ListPaginationOutput
+	CountsOmitted bool
+	Chats         []ListedChat
+	Pagination    ListPaginationOutput
 }
 
 type ListUseCase struct {
@@ -96,11 +101,35 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 	if err := validateCursorForPage(page, cursor); err != nil {
 		return ListOutput{}, err
 	}
-	result, err := useCase.chatRepository.ListByParticipant(ctx, ports.ListChatsParams{
-		ParticipantID: currentUserID,
-		Limit:         pageSize,
-		After:         cursor,
-	})
+	words, err := search.Parse(input.Query)
+	if err != nil {
+		return ListOutput{}, err
+	}
+	var result ports.ListChatsResult
+	if input.ChatID != "" {
+		id, parseErr := chat.ParseID(input.ChatID)
+		if parseErr != nil {
+			return ListOutput{}, ports.ErrChatNotFound
+		}
+		conversation, findErr := useCase.chatRepository.FindByID(ctx, id)
+		if errors.Is(findErr, ports.ErrChatNotFound) {
+			return ListOutput{}, ports.ErrChatNotFound
+		}
+		if findErr != nil {
+			return ListOutput{}, findErr
+		}
+		if conversation == nil || !conversation.HasParticipant(currentUserID) {
+			return ListOutput{}, ports.ErrChatNotFound
+		}
+		result = ports.ListChatsResult{Chats: []*chat.Chat{conversation}, TotalItems: 1}
+	} else {
+		result, err = useCase.chatRepository.ListByParticipant(ctx, ports.ListChatsParams{
+			SearchWords:   words,
+			ParticipantID: currentUserID,
+			Limit:         pageSize,
+			After:         cursor,
+		})
+	}
 	if err != nil {
 		return ListOutput{}, fmt.Errorf("list chats by participant: %w",
 			err)
@@ -146,7 +175,8 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 		return ListOutput{}, err
 	}
 	return ListOutput{
-		Chats: listedChats,
+		CountsOmitted: len(words) > 0,
+		Chats:         listedChats,
 		Pagination: ListPaginationOutput{
 			HasNext:    result.HasNext,
 			NextCursor: nextCursor,

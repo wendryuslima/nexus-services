@@ -1,5 +1,9 @@
 # Contrato HTTP — Chats
 
+Pesquisa por palavras do participante e abertura direta de uma conversa estão
+descritas no [contrato de pesquisa](search.md). Consultas com `q` possuem ordenação
+por criação e omitem os totais; a listagem sem pesquisa mantém o contrato abaixo.
+
 Este documento descreve o contrato público que o frontend deve usar para criar e listar chats diretos.
 
 ## Visão geral

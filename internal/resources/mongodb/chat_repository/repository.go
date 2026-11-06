@@ -35,6 +35,8 @@ func (repository *Repository) EnsureIndexes(
 	ctx context.Context,
 ) error {
 	indexes := []mongo.IndexModel{
+		{Keys: bson.D{{Key: "participant_one_id", Value: 1}, {Key: "participant_two_words", Value: 1}, {Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}, Options: options.Index().SetName("chat_one_peer_word_created")},
+		{Keys: bson.D{{Key: "participant_two_id", Value: 1}, {Key: "participant_one_words", Value: 1}, {Key: "created_at", Value: -1}, {Key: "_id", Value: -1}}, Options: options.Index().SetName("chat_two_peer_word_created")},
 		{
 			Keys: bson.D{
 				{Key: "participant_one_id", Value: 1},

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/wendryuslima/nexus-services/internal/domain/chat"
+	"github.com/wendryuslima/nexus-services/internal/domain/search"
 	domaintimeline "github.com/wendryuslima/nexus-services/internal/domain/timeline"
 	"github.com/wendryuslima/nexus-services/internal/domain/user"
 	"github.com/wendryuslima/nexus-services/internal/ports"
@@ -24,6 +25,8 @@ type ListCursorInput struct {
 }
 
 type ListInput struct {
+	Query           string
+	AroundSequence  *int64
 	CurrentUserID   string
 	ChatID          string
 	PageSize        int
@@ -63,6 +66,8 @@ type ListCursorOutput struct {
 }
 
 type ListPaginationOutput struct {
+	HasOlder           bool
+	HasNewer           bool
 	NextBeforeSequence *int64
 	NextAfterSequence  *int64
 	HasNext            bool
@@ -119,6 +124,13 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 	if err := validateSequenceInput(input); err != nil {
 		return ListOutput{}, err
 	}
+	words, err := search.Parse(input.Query)
+	if err != nil {
+		return ListOutput{}, err
+	}
+	if len(words) > 0 && (!input.SequenceOrder || input.AroundSequence != nil || input.AfterSequence != nil) {
+		return ListOutput{}, ErrInvalidCursor
+	}
 
 	conversation, err := useCase.chatRepository.FindByID(ctx, chatID)
 	if errors.Is(err, ports.ErrChatNotFound) {
@@ -135,6 +147,7 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 	}
 
 	result, err := useCase.timelineRepository.ListByChat(ctx, ports.ListTimelineParams{
+		SearchWords: words, AroundSequence: input.AroundSequence,
 		ChatID:          chatID,
 		Limit:           pageSize,
 		Before:          cursor,
@@ -189,6 +202,7 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 		SnapshotThroughSequence: result.SnapshotThroughSequence,
 		Items:                   items,
 		Pagination: ListPaginationOutput{
+			HasOlder: result.HasOlder, HasNewer: result.HasNewer,
 			NextBeforeSequence: result.NextBeforeSequence, NextAfterSequence: result.NextAfterSequence,
 			HasNext: result.HasNext, NextCursor: nextCursor, PageSize: pageSize,
 		},
@@ -196,6 +210,9 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 }
 
 func validateSequenceInput(input ListInput) error {
+	if input.AroundSequence != nil && (*input.AroundSequence < 1 || *input.AroundSequence > domaintimeline.MaxSequence || !input.SequenceOrder || input.BeforeSequence != nil || input.AfterSequence != nil || input.ThroughSequence != nil || input.Cursor != nil) {
+		return ErrInvalidCursor
+	}
 	if (input.SequenceOrder || input.AfterSequence != nil || input.BeforeSequence != nil || input.ThroughSequence != nil) && input.Cursor != nil {
 		return ErrInvalidCursor
 	}
@@ -205,7 +222,7 @@ func validateSequenceInput(input ListInput) error {
 	if input.AfterSequence != nil && input.SequenceOrder {
 		return ErrInvalidCursor
 	}
-	if input.ThroughSequence != nil && input.AfterSequence == nil {
+	if input.ThroughSequence != nil && input.AfterSequence == nil && strings.TrimSpace(input.Query) == "" {
 		return ErrInvalidCursor
 	}
 	for _, value := range []*int64{input.BeforeSequence, input.AfterSequence, input.ThroughSequence} {

@@ -61,6 +61,9 @@ func (repository *Repository) listBySequence(ctx context.Context, params ports.L
 			return nil, ports.ErrInvalidTimelinePagination
 		}
 		result.SnapshotThroughSequence = &upper
+		if params.AroundSequence != nil {
+			return nil, repository.readAround(tx, params, upper, &result)
+		}
 		bounds := bson.D{{Key: "$lte", Value: upper}}
 		order := int32(-1)
 		if params.AfterSequence != nil {
@@ -71,6 +74,12 @@ func (repository *Repository) listBySequence(ctx context.Context, params ports.L
 			bounds = append(bounds, bson.E{Key: "$lt", Value: *params.BeforeSequence})
 		}
 		filter = append(filter, bson.E{Key: "sequence", Value: bounds})
+		if len(params.SearchWords) > 0 {
+			filter = append(filter, bson.E{Key: "search_words", Value: params.SearchWords[0]})
+			if len(params.SearchWords) > 1 {
+				filter = append(filter, bson.E{Key: "$and", Value: bson.A{bson.M{"search_words": bson.M{"$all": params.SearchWords}}}})
+			}
+		}
 		cursor, err := repository.collection.Find(tx, filter, options.Find().SetSort(bson.D{{Key: "sequence", Value: order}}).SetLimit(int64(params.Limit)+1))
 		if err != nil {
 			return nil, err
@@ -92,6 +101,13 @@ func (repository *Repository) listBySequence(ctx context.Context, params ports.L
 			return nil, err
 		}
 		result.HasNext = len(items) > params.Limit
+		if params.AfterSequence != nil {
+			result.HasNewer = result.HasNext
+			result.HasOlder = *params.AfterSequence > 0
+		} else {
+			result.HasOlder = result.HasNext
+			result.HasNewer = params.BeforeSequence != nil
+		}
 		if result.HasNext {
 			items = items[:params.Limit]
 		}

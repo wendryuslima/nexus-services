@@ -14,6 +14,8 @@ type TimelineCursor struct {
 }
 
 type ListTimelineParams struct {
+	SearchWords     []string
+	AroundSequence  *int64
 	ChatID          chat.ID
 	Limit           int
 	Before          *TimelineCursor
@@ -24,6 +26,8 @@ type ListTimelineParams struct {
 }
 
 type ListTimelineResult struct {
+	HasOlder                bool
+	HasNewer                bool
 	Items                   []*timeline.Item
 	HasNext                 bool
 	NextCursor              *TimelineCursor

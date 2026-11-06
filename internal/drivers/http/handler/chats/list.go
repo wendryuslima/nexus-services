@@ -12,7 +12,9 @@ import (
 	"time"
 
 	applicationchats "github.com/wendryuslima/nexus-services/internal/application/chats"
+	"github.com/wendryuslima/nexus-services/internal/domain/search"
 	"github.com/wendryuslima/nexus-services/internal/drivers/http/middleware/authentication"
+	"github.com/wendryuslima/nexus-services/internal/ports"
 )
 
 type ListExecutor interface {
@@ -42,8 +44,8 @@ type listPaginationResponse struct {
 	NextCursor *listNextCursorResponse `json:"nextCursor"`
 	Page       int                     `json:"page"`
 	PageSize   int                     `json:"pageSize"`
-	TotalItems int64                   `json:"totalItems"`
-	TotalPages int64                   `json:"totalPages"`
+	TotalItems *int64                  `json:"totalItems,omitempty"`
+	TotalPages *int64                  `json:"totalPages,omitempty"`
 }
 
 type listNextCursorResponse struct {
@@ -120,6 +122,7 @@ func (handler *ListHandler) ServeHTTP(
 		return
 	}
 
+	input.ChatID = httpRequest.PathValue("chatId")
 	output, err := handler.useCase.Execute(
 		httpRequest.Context(),
 		input,
@@ -145,6 +148,10 @@ func parseListInput(
 	query url.Values,
 	currentUserID string,
 ) (applicationchats.ListInput, error) {
+	term, _, err := optionalSingleQueryValue(query, "q")
+	if err != nil {
+		return applicationchats.ListInput{}, err
+	}
 	page, err := parseOptionalIntegerQuery(
 		query,
 		"page",
@@ -187,6 +194,7 @@ func parseListInput(
 	}
 
 	return applicationchats.ListInput{
+		Query:         term,
 		CurrentUserID: currentUserID,
 		Page:          page,
 		PageSize:      pageSize,
@@ -283,6 +291,11 @@ func mapListResponse(
 		}
 	}
 
+	var totalItems, totalPages *int64
+	if !output.CountsOmitted {
+		totalItems = &output.Pagination.TotalItems
+		totalPages = &output.Pagination.TotalPages
+	}
 	return listResponse{
 		Data: items,
 		Pagination: listPaginationResponse{
@@ -290,8 +303,8 @@ func mapListResponse(
 			NextCursor: nextCursor,
 			Page:       output.Pagination.Page,
 			PageSize:   output.Pagination.PageSize,
-			TotalItems: output.Pagination.TotalItems,
-			TotalPages: output.Pagination.TotalPages,
+			TotalItems: totalItems,
+			TotalPages: totalPages,
 		},
 	}
 }
@@ -302,6 +315,10 @@ func (handler *ListHandler) handleUseCaseError(
 	err error,
 ) {
 	switch {
+	case errors.Is(err, search.ErrInvalidQuery):
+		writePublicError(handler.logger, writer, http.StatusBadRequest, "invalid_search", "Informe de 1 a 8 palavras, com até 200 caracteres.")
+	case errors.Is(err, ports.ErrChatNotFound):
+		writePublicError(handler.logger, writer, http.StatusNotFound, "chat_not_found", "O chat informado não foi encontrado.")
 	case errors.Is(err, applicationchats.ErrInvalidPage),
 		errors.Is(err, applicationchats.ErrInvalidPageSize),
 		errors.Is(err, applicationchats.ErrInvalidCursor),

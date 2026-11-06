@@ -9,7 +9,9 @@ import (
 )
 
 type chatDocument struct {
-	ID string `bson:"_id"`
+	ParticipantOneWords []string `bson:"participant_one_words"`
+	ParticipantTwoWords []string `bson:"participant_two_words"`
+	ID                  string   `bson:"_id"`
 
 	ParticipantOneID string `bson:"participant_one_id"`
 	ParticipantTwoID string `bson:"participant_two_id"`

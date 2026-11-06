@@ -14,6 +14,7 @@ type ChatListCursor struct {
 }
 
 type ListChatsParams struct {
+	SearchWords   []string
 	ParticipantID user.ID
 	Limit         int
 	After         *ChatListCursor

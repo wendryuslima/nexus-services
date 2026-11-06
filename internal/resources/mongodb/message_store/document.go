@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/wendryuslima/nexus-services/internal/domain/chat"
+	"github.com/wendryuslima/nexus-services/internal/domain/search"
 	"github.com/wendryuslima/nexus-services/internal/domain/timeline"
 	"github.com/wendryuslima/nexus-services/internal/domain/user"
 	"github.com/wendryuslima/nexus-services/internal/ports"
@@ -32,13 +33,14 @@ type messageDocument struct {
 }
 
 type timelineItemDocument struct {
-	ID        string          `bson:"_id"`
-	ChatID    string          `bson:"chat_id"`
-	Sequence  int64           `bson:"sequence"`
-	Kind      string          `bson:"kind"`
-	CreatedAt time.Time       `bson:"created_at"`
-	UpdatedAt time.Time       `bson:"updated_at"`
-	Message   messageDocument `bson:"message"`
+	SearchWords []string        `bson:"search_words"`
+	ID          string          `bson:"_id"`
+	ChatID      string          `bson:"chat_id"`
+	Sequence    int64           `bson:"sequence"`
+	Kind        string          `bson:"kind"`
+	CreatedAt   time.Time       `bson:"created_at"`
+	UpdatedAt   time.Time       `bson:"updated_at"`
+	Message     messageDocument `bson:"message"`
 }
 
 type eventContentDocument struct {
@@ -84,12 +86,13 @@ func newTimelineItemDocument(
 	createdAt := params.CreatedAt.UTC()
 
 	return timelineItemDocument{
-		ID:        params.MessageID.String(),
-		ChatID:    params.ChatID.String(),
-		Sequence:  sequence.Int64(),
-		Kind:      string(timeline.KindMessage),
-		CreatedAt: createdAt,
-		UpdatedAt: createdAt,
+		SearchWords: search.Words(content.Value() + " " + content.Caption()),
+		ID:          params.MessageID.String(),
+		ChatID:      params.ChatID.String(),
+		Sequence:    sequence.Int64(),
+		Kind:        string(timeline.KindMessage),
+		CreatedAt:   createdAt,
+		UpdatedAt:   createdAt,
 		Message: messageDocument{
 			ClientMessageID: message.ClientMessageID().String(),
 			SenderID:        message.SenderID().String(),

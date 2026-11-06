@@ -54,6 +54,15 @@ func TestCreateWithOutboxPersistsAtomicallyAndIsIdempotent(t *testing.T) {
 
 	assertIntegrationCount(t, ctx, collections.timeline, 1)
 	assertIntegrationCount(t, ctx, collections.outbox, 1)
+	var searchable struct {
+		Words []string `bson:"search_words"`
+	}
+	if err := collections.timeline.FindOne(ctx, bson.M{"_id": "message-1"}).Decode(&searchable); err != nil {
+		t.Fatal(err)
+	}
+	if len(searchable.Words) != 1 || searchable.Words[0] != "ola" {
+		t.Fatalf("message words were not persisted atomically: %+v", searchable.Words)
+	}
 
 	var storedChat struct {
 		LastSequence int64 `bson:"last_sequence"`

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	applicationtimeline "github.com/wendryuslima/nexus-services/internal/application/timeline"
+	"github.com/wendryuslima/nexus-services/internal/domain/search"
 	"github.com/wendryuslima/nexus-services/internal/domain/timeline"
 	"github.com/wendryuslima/nexus-services/internal/drivers/http/middleware/authentication"
 )
@@ -58,6 +59,8 @@ type timelineContentResponse struct {
 }
 
 type timelinePaginationResponse struct {
+	HasOlder           bool                        `json:"hasOlder"`
+	HasNewer           bool                        `json:"hasNewer"`
 	NextBeforeSequence *int64                      `json:"nextBeforeSequence"`
 	NextAfterSequence  *int64                      `json:"nextAfterSequence"`
 	HasNext            bool                        `json:"hasNext"`
@@ -161,13 +164,14 @@ func parseTimelineInput(query url.Values, currentUserID string, chatID string) (
 	input := applicationtimeline.ListInput{
 		CurrentUserID: currentUserID, ChatID: chatID, PageSize: pageSize, Cursor: cursor,
 	}
+	input.Query = query.Get("q")
 	if query.Has("order") {
 		if query.Get("order") != "sequence" {
 			return input, ErrInvalidQueryParameter
 		}
 		input.SequenceOrder = true
 	}
-	for key, target := range map[string]**int64{"beforeSequence": &input.BeforeSequence, "afterSequence": &input.AfterSequence, "throughSequence": &input.ThroughSequence} {
+	for key, target := range map[string]**int64{"aroundSequence": &input.AroundSequence, "beforeSequence": &input.BeforeSequence, "afterSequence": &input.AfterSequence, "throughSequence": &input.ThroughSequence} {
 		if query.Has(key) {
 			raw := query.Get(key)
 			if raw == "" || strings.IndexFunc(raw, func(r rune) bool { return r < '0' || r > '9' }) != -1 {
@@ -183,7 +187,13 @@ func parseTimelineInput(query url.Values, currentUserID string, chatID string) (
 	if cursor != nil && (input.SequenceOrder || input.BeforeSequence != nil || input.AfterSequence != nil || input.ThroughSequence != nil) ||
 		input.BeforeSequence != nil && (!input.SequenceOrder || *input.BeforeSequence == 0) ||
 		input.AfterSequence != nil && (input.SequenceOrder || input.BeforeSequence != nil) ||
-		input.ThroughSequence != nil && (input.AfterSequence == nil || *input.AfterSequence > *input.ThroughSequence) {
+		input.ThroughSequence != nil && ((input.AfterSequence == nil && strings.TrimSpace(input.Query) == "") || (input.AfterSequence != nil && *input.AfterSequence > *input.ThroughSequence)) {
+		return input, ErrInvalidQueryParameter
+	}
+	if input.AroundSequence != nil && (!input.SequenceOrder || *input.AroundSequence < 1 || input.BeforeSequence != nil || input.AfterSequence != nil || input.ThroughSequence != nil || input.Cursor != nil || strings.TrimSpace(input.Query) != "") {
+		return input, ErrInvalidQueryParameter
+	}
+	if strings.TrimSpace(input.Query) != "" && (!input.SequenceOrder || input.AfterSequence != nil || input.Cursor != nil) {
 		return input, ErrInvalidQueryParameter
 	}
 	return input, nil
@@ -212,6 +222,7 @@ func mapTimelineResponse(output applicationtimeline.ListOutput) timelineResponse
 		SnapshotThroughSequence: output.SnapshotThroughSequence,
 		Items:                   items,
 		Pagination: timelinePaginationResponse{
+			HasOlder: output.Pagination.HasOlder, HasNewer: output.Pagination.HasNewer,
 			NextBeforeSequence: output.Pagination.NextBeforeSequence, NextAfterSequence: output.Pagination.NextAfterSequence,
 			HasNext: output.Pagination.HasNext, NextCursor: nextCursor, PageSize: output.Pagination.PageSize,
 		},
@@ -220,6 +231,8 @@ func mapTimelineResponse(output applicationtimeline.ListOutput) timelineResponse
 
 func (handler *TimelineHandler) handleTimelineError(writer http.ResponseWriter, request *http.Request, err error) {
 	switch {
+	case errors.Is(err, search.ErrInvalidQuery):
+		writePublicError(handler.logger, writer, http.StatusBadRequest, "invalid_search", "Informe de 1 a 8 palavras, com até 200 caracteres.")
 	case errors.Is(err, applicationtimeline.ErrInvalidPageSize), errors.Is(err, applicationtimeline.ErrInvalidCursor):
 		writePublicError(handler.logger, writer, http.StatusBadRequest, "invalid_pagination", "Os parâmetros de paginação são inválidos.")
 	case errors.Is(err, applicationtimeline.ErrInvalidChatID), errors.Is(err, applicationtimeline.ErrChatNotFound):
