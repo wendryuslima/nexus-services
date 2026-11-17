@@ -122,6 +122,8 @@ func (content MessageContent) Value() string {
 }
 
 type Message struct {
+	replyID         ID
+	replyTo         *ReplyContext
 	clientMessageID ClientMessageID
 	senderID        user.ID
 	content         MessageContent

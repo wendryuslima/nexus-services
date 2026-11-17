@@ -41,7 +41,7 @@ func (repository *Repository) CreateWithOutbox(
 		return resolveExistingMessage(existingItem, params)
 	}
 
-	sequence, err := repository.createTransaction(ctx, params)
+	document, err := repository.createTransaction(ctx, params)
 	if err != nil {
 
 		if mongo.IsDuplicateKeyError(err) || errors.Is(err, ports.ErrImageUnavailable) {
@@ -72,8 +72,6 @@ func (repository *Repository) CreateWithOutbox(
 			err,
 		)
 	}
-
-	document := newTimelineItemDocument(params, sequence)
 
 	item, err := document.toDomain()
 	if err != nil {
@@ -235,19 +233,35 @@ func sameLogicalMessage(
 	existingContent := existingMessage.Content()
 	requestedContent := requestedMessage.Content()
 
-	return existingContent.Type() == requestedContent.Type() &&
+	return existingMessage.ReplyID() == requestedMessage.ReplyID() &&
+		existingContent.Type() == requestedContent.Type() &&
 		existingContent.Value() == requestedContent.Value() && existingContent.ImageID() == requestedContent.ImageID() && existingContent.Caption() == requestedContent.Caption()
 }
 
 func (repository *Repository) createTransaction(
 	ctx context.Context,
 	params ports.CreateMessageParams,
-) (timeline.Sequence, error) {
-	var allocatedSequence timeline.Sequence
+) (timelineItemDocument, error) {
+	var createdDocument timelineItemDocument
 
 	err := repository.transactions.RunInTransaction(
 		ctx,
 		func(transactionContext context.Context) error {
+			if replyID := params.Message.ReplyID(); replyID.String() != "" {
+				var original timelineItemDocument
+				err := repository.timelineCollection.FindOne(transactionContext, bson.M{"_id": replyID.String(), "chat_id": params.ChatID.String(), "kind": string(timeline.KindMessage)}).Decode(&original)
+				if errors.Is(err, mongo.ErrNoDocuments) {
+					return ports.ErrReplyUnavailable
+				}
+				if err != nil {
+					return fmt.Errorf("find replied message: %w", err)
+				}
+				item, err := original.toDomain()
+				if err != nil {
+					return err
+				}
+				params.Message = params.Message.WithReply(replyID, &timeline.ReplyContext{SenderID: item.Message().SenderID(), Sequence: item.Sequence(), Content: item.Message().Content()})
+			}
 			if params.Message.Content().Type() == timeline.ContentTypeImage {
 				if repository.imagesCollection == nil {
 					return errors.New("images collection is required for image messages")
@@ -270,8 +284,6 @@ func (repository *Repository) createTransaction(
 				return err
 			}
 
-			allocatedSequence = sequence
-
 			timelineDocument := newTimelineItemDocument(
 				params,
 				sequence,
@@ -286,6 +298,8 @@ func (repository *Repository) createTransaction(
 					err,
 				)
 			}
+
+			createdDocument = timelineDocument
 
 			outboxDocument := newOutboxEventDocument(
 				params,
@@ -306,16 +320,16 @@ func (repository *Repository) createTransaction(
 		},
 	)
 	if err != nil {
-		return 0, err
+		return timelineItemDocument{}, err
 	}
 
-	if allocatedSequence.Int64() <= 0 {
-		return 0, errors.New(
+	if createdDocument.Sequence <= 0 {
+		return timelineItemDocument{}, errors.New(
 			"transaction completed without allocating a sequence",
 		)
 	}
 
-	return allocatedSequence, nil
+	return createdDocument, nil
 }
 
 func (repository *Repository) allocateSequence(

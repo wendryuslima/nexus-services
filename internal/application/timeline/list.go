@@ -45,6 +45,8 @@ type ListedContent struct {
 }
 
 type ListedMessage struct {
+	ReplyID         string
+	ReplyTo         *ports.MessageReply
 	ClientMessageID string
 	SenderID        string
 	IsMine          bool
@@ -185,6 +187,8 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 			Message: ListedMessage{
 				ClientMessageID: message.ClientMessageID().String(),
 				SenderID:        message.SenderID().String(),
+				ReplyID:         message.ReplyID().String(),
+				ReplyTo:         ports.ReplyFromDomain(message.ReplyTo()),
 				IsMine:          message.SenderID().String() == currentUserID.String(),
 				Content:         ListedContent{Type: string(content.Type()), Value: content.Value(), ImageID: content.ImageID(), Caption: content.Caption()},
 			},

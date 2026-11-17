@@ -46,6 +46,7 @@ O backend retorna o mesmo `404 chat_not_found` tanto para um chat inexistente qu
 | Campo | Tipo | Obrigatório | Regras |
 | --- | --- | --- | --- |
 | `clientMessageId` | string | Sim | UUID canônico, diferente do UUID nulo. Deve ser gerado uma vez pelo cliente e reutilizado em retries da mesma mensagem. |
+| `replyID` | string | Não | ID persistido da mensagem respondida, enviada ou recebida, na mesma conversa. |
 | `content` | object | Sim | Conteúdo da mensagem. |
 | `content.type` | string | Sim | `TEXT` ou `IMAGE`. |
 | `content.value` | string | Para `TEXT` | Texto UTF-8 não vazio, com no máximo 4.000 caracteres Unicode. |
@@ -137,6 +138,33 @@ O frontend deve tratar `200` e `201` como sucesso. A notificação `message.crea
 ---
 
 ## Idempotência e retries
+
+Respostas usam `replyID` no corpo de criação. A referência participa da identidade
+da mensagem: reutilizar `clientMessageId` com outro `replyID`, inclusive removendo
+a referência, retorna `409 idempotency_conflict`.
+
+O servidor valida a mensagem original na transação de criação e persiste uma cópia
+de seu contexto, sem encadear respostas anteriores. Mensagens inexistentes ou de
+outra conversa retornam `422 reply_unavailable`. O cliente não envia esse contexto.
+
+O POST, a timeline (`message`) e o evento `message.created` (`data`) retornam os
+campos opcionais abaixo. Eles são omitidos para mensagens sem resposta:
+
+```json
+{
+  "replyID": "mensagem-original",
+  "replyTo": {
+    "senderId": "autor-original",
+    "sequence": 12,
+    "content": { "type": "TEXT", "value": "Precisamos colocar em produção hoje." }
+  }
+}
+```
+
+`replyTo.content` também pode ser `IMAGE`, com `imageId` e `caption` opcional.
+A cópia representa o conteúdo no momento da resposta; edição e exclusão de
+mensagens ainda não são suportadas. Cada mensagem carrega seu próprio contexto,
+independentemente da página em que a original se encontra.
 
 A chave de idempotência é o par formado por usuário autenticado e `clientMessageId`.
 

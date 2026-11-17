@@ -9,6 +9,7 @@ import (
 	"github.com/wendryuslima/nexus-services/internal/domain/timeline"
 	"github.com/wendryuslima/nexus-services/internal/domain/user"
 	"github.com/wendryuslima/nexus-services/internal/ports"
+	replydocument "github.com/wendryuslima/nexus-services/internal/resources/mongodb/reply_document"
 )
 
 const (
@@ -27,9 +28,11 @@ type messageContentDocument struct {
 }
 
 type messageDocument struct {
-	ClientMessageID string                 `bson:"client_message_id"`
-	SenderID        string                 `bson:"sender_id"`
-	Content         messageContentDocument `bson:"content"`
+	ReplyID         string                  `bson:"reply_id,omitempty"`
+	ReplyTo         *replydocument.Document `bson:"reply_to,omitempty"`
+	ClientMessageID string                  `bson:"client_message_id"`
+	SenderID        string                  `bson:"sender_id"`
+	Content         messageContentDocument  `bson:"content"`
 }
 
 type timelineItemDocument struct {
@@ -51,13 +54,15 @@ type eventContentDocument struct {
 }
 
 type messageCreatedPayloadDocument struct {
-	MessageID       string               `bson:"messageId" json:"messageId"`
-	ClientMessageID string               `bson:"clientMessageId,omitempty" json:"clientMessageId,omitempty"`
-	ChatID          string               `bson:"chatId" json:"chatId"`
-	Sequence        int64                `bson:"sequence" json:"sequence"`
-	SenderID        string               `bson:"senderId" json:"senderId"`
-	Content         eventContentDocument `bson:"content" json:"content"`
-	CreatedAt       time.Time            `bson:"createdAt" json:"createdAt"`
+	ReplyID         string                  `bson:"replyID,omitempty" json:"replyID,omitempty"`
+	ReplyTo         *replydocument.Document `bson:"replyTo,omitempty" json:"replyTo,omitempty"`
+	MessageID       string                  `bson:"messageId" json:"messageId"`
+	ClientMessageID string                  `bson:"clientMessageId,omitempty" json:"clientMessageId,omitempty"`
+	ChatID          string                  `bson:"chatId" json:"chatId"`
+	Sequence        int64                   `bson:"sequence" json:"sequence"`
+	SenderID        string                  `bson:"senderId" json:"senderId"`
+	Content         eventContentDocument    `bson:"content" json:"content"`
+	CreatedAt       time.Time               `bson:"createdAt" json:"createdAt"`
 }
 
 type outboxEventDocument struct {
@@ -94,6 +99,8 @@ func newTimelineItemDocument(
 		CreatedAt:   createdAt,
 		UpdatedAt:   createdAt,
 		Message: messageDocument{
+			ReplyID:         message.ReplyID().String(),
+			ReplyTo:         replydocument.FromDomain(message.ReplyTo()),
 			ClientMessageID: message.ClientMessageID().String(),
 			SenderID:        message.SenderID().String(),
 			Content: messageContentDocument{
@@ -120,6 +127,8 @@ func newOutboxEventDocument(
 		EventType:     messageCreatedEventType,
 
 		Payload: messageCreatedPayloadDocument{
+			ReplyID:   message.ReplyID().String(),
+			ReplyTo:   replydocument.FromDomain(message.ReplyTo()),
 			MessageID: params.MessageID.String(),
 
 			ClientMessageID: message.ClientMessageID().String(),
@@ -234,6 +243,18 @@ func (document timelineItemDocument) toDomain() (*timeline.Item, error) {
 			ErrInvalidStoredDocument,
 			err,
 		)
+	}
+
+	if document.Message.ReplyID != "" {
+		replyID, err := timeline.ParseID(document.Message.ReplyID)
+		if err != nil {
+			return nil, err
+		}
+		reply, err := document.Message.ReplyTo.ToDomain()
+		if err != nil {
+			return nil, err
+		}
+		message = message.WithReply(replyID, reply)
 	}
 
 	item, err := timeline.RestoreMessage(

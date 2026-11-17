@@ -32,6 +32,7 @@ type CreateContentInput struct {
 }
 
 type CreateInput struct {
+	ReplyID         string
 	CurrentUserID   string
 	ChatID          string
 	ClientMessageID string
@@ -46,6 +47,8 @@ type CreatedContent struct {
 }
 
 type CreateOutput struct {
+	ReplyID         string
+	ReplyTo         *ports.MessageReply
 	ID              string
 	ClientMessageID string
 	ChatID          string
@@ -175,6 +178,14 @@ func (useCase *CreateUseCase) Execute(
 			"create message value: %w",
 			err,
 		)
+	}
+
+	if input.ReplyID != "" {
+		replyID, err := timeline.ParseID(input.ReplyID)
+		if err != nil || replyID.String() != input.ReplyID || len(input.ReplyID) > 256 {
+			return CreateOutput{}, ports.ErrReplyUnavailable
+		}
+		message = message.WithReply(replyID, nil)
 	}
 
 	messageID, err := useCase.generateMessageID(ctx)
@@ -356,6 +367,10 @@ func validateStoredItem(
 		)
 	}
 
+	if storedMessage.ReplyID() != expectedMessage.ReplyID() {
+		return errors.New("message store returned another reply id")
+	}
+
 	storedContent := storedMessage.Content()
 	expectedContent := expectedMessage.Content()
 
@@ -377,6 +392,8 @@ func mapCreateOutput(
 	content := message.Content()
 
 	return CreateOutput{
+		ReplyID:         message.ReplyID().String(),
+		ReplyTo:         ports.ReplyFromDomain(message.ReplyTo()),
 		ID:              item.ID().String(),
 		ClientMessageID: message.ClientMessageID().String(),
 		ChatID:          item.ChatID().String(),

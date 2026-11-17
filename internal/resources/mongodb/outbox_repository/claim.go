@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/wendryuslima/nexus-services/internal/ports"
+	replydocument "github.com/wendryuslima/nexus-services/internal/resources/mongodb/reply_document"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -26,13 +27,15 @@ type claimedContentDocument struct {
 }
 
 type claimedPayloadDocument struct {
-	MessageID       string                 `bson:"messageId"`
-	ClientMessageID string                 `bson:"clientMessageId"`
-	ChatID          string                 `bson:"chatId"`
-	Sequence        int64                  `bson:"sequence"`
-	SenderID        string                 `bson:"senderId"`
-	Content         claimedContentDocument `bson:"content"`
-	CreatedAt       time.Time              `bson:"createdAt"`
+	ReplyID         string                  `bson:"replyID"`
+	ReplyTo         *replydocument.Document `bson:"replyTo"`
+	MessageID       string                  `bson:"messageId"`
+	ClientMessageID string                  `bson:"clientMessageId"`
+	ChatID          string                  `bson:"chatId"`
+	Sequence        int64                   `bson:"sequence"`
+	SenderID        string                  `bson:"senderId"`
+	Content         claimedContentDocument  `bson:"content"`
+	CreatedAt       time.Time               `bson:"createdAt"`
 }
 
 type claimedEventDocument struct {
@@ -55,6 +58,8 @@ func (document claimedEventDocument) toPort() *ports.OutboxEvent {
 		LeaseID:       document.LeaseID,
 
 		Payload: ports.MessageCreatedPayload{
+			ReplyID:   document.Payload.ReplyID,
+			ReplyTo:   document.Payload.ReplyTo.ToPort(),
 			MessageID: document.Payload.MessageID,
 
 			ClientMessageID: document.Payload.ClientMessageID,

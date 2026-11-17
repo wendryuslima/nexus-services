@@ -14,6 +14,7 @@ import (
 	"github.com/wendryuslima/nexus-services/internal/domain/search"
 	"github.com/wendryuslima/nexus-services/internal/domain/timeline"
 	"github.com/wendryuslima/nexus-services/internal/drivers/http/middleware/authentication"
+	"github.com/wendryuslima/nexus-services/internal/ports"
 )
 
 const (
@@ -45,6 +46,8 @@ type timelineItemResponse struct {
 }
 
 type timelineMessageResponse struct {
+	ReplyID         string                  `json:"replyID,omitempty"`
+	ReplyTo         *ports.MessageReply     `json:"replyTo,omitempty"`
 	ClientMessageID string                  `json:"clientMessageId,omitempty"`
 	SenderID        string                  `json:"senderId"`
 	IsMine          bool                    `json:"isMine"`
@@ -208,6 +211,8 @@ func mapTimelineResponse(output applicationtimeline.ListOutput) timelineResponse
 			Message: timelineMessageResponse{
 				ClientMessageID: item.Message.ClientMessageID,
 				SenderID:        item.Message.SenderID, IsMine: item.Message.IsMine,
+				ReplyID: item.Message.ReplyID,
+				ReplyTo: item.Message.ReplyTo,
 				Content: timelineContentResponse{Type: item.Message.Content.Type, Value: item.Message.Content.Value, ImageID: item.Message.Content.ImageID, Caption: item.Message.Content.Caption},
 			},
 		})

@@ -72,6 +72,13 @@ GET /v1/chats/6ab85d4aa94d3539db5a83a0/timeline?pageSize=50&cursorId=6ab85d4aa94
 
 `message.isMine` não é persistido. O backend calcula o valor em cada consulta comparando `message.senderId` com o ID do usuário autenticado.
 
+Mensagens que respondem a outra incluem `message.replyID` e `message.replyTo`
+(`senderId`, `sequence`, `content` da original). O contexto é persistido na criação
+da resposta e acompanha todas as formas de leitura, inclusive cursor legado,
+paginação por sequência, recuperação incremental, pesquisa e janela histórica.
+Não é necessário carregar a página da original nem alterar os cursores para
+exibir a citação. Veja o [contrato de mensagens](frontend-messages-contract.md).
+
 Quando não houver página anterior:
 
 ```json

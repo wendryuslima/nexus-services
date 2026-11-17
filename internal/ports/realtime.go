@@ -14,7 +14,9 @@ const (
 )
 
 type RealtimeMessageData struct {
-	ID string `json:"id"`
+	ReplyID string        `json:"replyID,omitempty"`
+	ReplyTo *MessageReply `json:"replyTo,omitempty"`
+	ID      string        `json:"id"`
 
 	ClientMessageID string `json:"clientMessageId,omitempty"`
 

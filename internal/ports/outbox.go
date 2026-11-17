@@ -22,6 +22,8 @@ func ValidMessageContent(content OutboxContent) bool {
 }
 
 type MessageCreatedPayload struct {
+	ReplyID         string        `json:"replyID,omitempty"`
+	ReplyTo         *MessageReply `json:"replyTo,omitempty"`
 	MessageID       string        `json:"messageId"`
 	ClientMessageID string        `json:"clientMessageId,omitempty"`
 	ChatID          string        `json:"chatId"`

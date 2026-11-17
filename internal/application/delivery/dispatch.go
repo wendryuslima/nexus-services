@@ -32,6 +32,9 @@ func NewDispatchMessageCreated(chats chatLookup, realtime ports.RealtimePublishe
 
 func validateMessageCreated(event ports.MessageCreatedEvent) error {
 	payload := event.Payload
+	if !ports.ValidMessageReply(payload.ReplyID, payload.ReplyTo, payload.Sequence) {
+		return ports.ErrInvalidMessageCreatedEvent
+	}
 	if strings.TrimSpace(event.EventID) == "" ||
 		event.EventType != ports.MessageCreatedEventTypeV1 ||
 		event.AggregateType != "CHAT" ||
@@ -104,6 +107,8 @@ func (useCase *DispatchMessageCreated) Dispatch(ctx context.Context, event ports
 			ChatID:          event.Payload.ChatID,
 			Sequence:        event.Payload.Sequence,
 			SenderID:        event.Payload.SenderID,
+			ReplyID:         event.Payload.ReplyID,
+			ReplyTo:         event.Payload.ReplyTo,
 			Content:         event.Payload.Content,
 			CreatedAt:       event.Payload.CreatedAt.UTC(),
 		},

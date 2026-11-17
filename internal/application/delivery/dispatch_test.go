@@ -106,6 +106,31 @@ func TestDispatchMessageCreatedPublishesToBothParticipants(t *testing.T) {
 	}
 }
 
+func TestDispatchPreservesReplyForBothParticipants(t *testing.T) {
+	event, conversation := fixture(t)
+	event.Payload.ReplyID = "original"
+	event.Payload.ReplyTo = &ports.MessageReply{SenderID: "recipient-1", Sequence: 2, Content: ports.OutboxContent{Type: "IMAGE", ImageID: "original-image", Caption: "Legenda"}}
+	realtime := &realtimeStub{}
+	useCase, err := NewDispatchMessageCreated(&chatLookupStub{conversation: conversation}, realtime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := useCase.Dispatch(context.Background(), event); err != nil {
+		t.Fatal(err)
+	}
+	if len(realtime.events) != 2 {
+		t.Fatal("expected both participants")
+	}
+	for _, published := range realtime.events {
+		if err := ports.ValidateRealtimeMessage(published); err != nil {
+			t.Fatal(err)
+		}
+		if published.Data.ReplyID != "original" || published.Data.ReplyTo == nil || published.Data.ReplyTo.Content.ImageID != "original-image" {
+			t.Fatalf("reply lost: %+v", published.Data)
+		}
+	}
+}
+
 func TestDispatchPartialFailureRetriesSameEvent(t *testing.T) {
 	event, conversation := fixture(t)
 	failure := errors.New("second publication failed")

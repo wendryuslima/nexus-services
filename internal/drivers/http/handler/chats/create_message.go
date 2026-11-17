@@ -37,6 +37,7 @@ type createMessageContentRequest struct {
 }
 
 type createMessageRequest struct {
+	ReplyID         string                      `json:"replyID,omitempty"`
 	ClientMessageID string                      `json:"clientMessageId"`
 	Content         createMessageContentRequest `json:"content"`
 }
@@ -46,6 +47,8 @@ type createMessageResponse struct {
 }
 
 type createMessageResponseData struct {
+	ReplyID         string                       `json:"replyID,omitempty"`
+	ReplyTo         *ports.MessageReply          `json:"replyTo,omitempty"`
 	ID              string                       `json:"id"`
 	ClientMessageID string                       `json:"clientMessageId"`
 	ChatID          string                       `json:"chatId"`
@@ -152,6 +155,7 @@ func (handler *CreateMessageHandler) ServeHTTP(
 			CurrentUserID:   identity.UserID,
 			ChatID:          chatID,
 			ClientMessageID: body.ClientMessageID,
+			ReplyID:         body.ReplyID,
 			Content: applicationmessages.CreateContentInput{
 				Type:  body.Content.Type,
 				Value: body.Content.Value, ImageID: body.Content.ImageID, Caption: body.Content.Caption,
@@ -218,6 +222,8 @@ func mapCreateMessageResponse(output applicationmessages.CreateOutput) createMes
 	return createMessageResponse{
 		Data: createMessageResponseData{
 			ID:              output.ID,
+			ReplyID:         output.ReplyID,
+			ReplyTo:         output.ReplyTo,
 			ClientMessageID: output.ClientMessageID,
 			ChatID:          output.ChatID,
 			Sequence:        output.Sequence,
@@ -238,6 +244,8 @@ func (handler *CreateMessageHandler) handleUseCaseError(
 	err error,
 ) {
 	switch {
+	case errors.Is(err, ports.ErrReplyUnavailable):
+		writePublicError(handler.logger, writer, http.StatusUnprocessableEntity, "reply_unavailable", "A mensagem que você deseja responder não está disponível nesta conversa.")
 	case errors.Is(err, ports.ErrImageUnavailable):
 		writePublicError(handler.logger, writer, http.StatusConflict, "image_unavailable", "A imagem não está disponível para esta conversa. Selecione a imagem novamente.")
 	case errors.Is(err, applicationmessages.ErrInvalidCurrentUserID):

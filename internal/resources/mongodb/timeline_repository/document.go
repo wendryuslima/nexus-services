@@ -7,6 +7,7 @@ import (
 	"github.com/wendryuslima/nexus-services/internal/domain/chat"
 	"github.com/wendryuslima/nexus-services/internal/domain/timeline"
 	"github.com/wendryuslima/nexus-services/internal/domain/user"
+	replydocument "github.com/wendryuslima/nexus-services/internal/resources/mongodb/reply_document"
 )
 
 type messageContentDocument struct {
@@ -17,9 +18,11 @@ type messageContentDocument struct {
 }
 
 type messageDocument struct {
-	ClientMessageID string                 `bson:"client_message_id"`
-	SenderID        string                 `bson:"sender_id"`
-	Content         messageContentDocument `bson:"content"`
+	ReplyID         string                  `bson:"reply_id,omitempty"`
+	ReplyTo         *replydocument.Document `bson:"reply_to,omitempty"`
+	ClientMessageID string                  `bson:"client_message_id"`
+	SenderID        string                  `bson:"sender_id"`
+	Content         messageContentDocument  `bson:"content"`
 }
 
 type timelineItemDocument struct {
@@ -120,6 +123,18 @@ func (document timelineItemDocument) toDomain() (*timeline.Item, error) {
 			ErrInvalidDocument,
 			err,
 		)
+	}
+
+	if document.Message.ReplyID != "" {
+		replyID, err := timeline.ParseID(document.Message.ReplyID)
+		if err != nil {
+			return nil, err
+		}
+		reply, err := document.Message.ReplyTo.ToDomain()
+		if err != nil {
+			return nil, err
+		}
+		message = message.WithReply(replyID, reply)
 	}
 
 	item, err := timeline.RestoreMessage(
