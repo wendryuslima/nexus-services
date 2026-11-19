@@ -19,6 +19,7 @@ import (
 	"github.com/wendryuslima/nexus-services/internal/resources/identifier"
 	"github.com/wendryuslima/nexus-services/internal/resources/mongodb"
 	outboxrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/outbox_repository"
+	chatstream "github.com/wendryuslima/nexus-services/internal/resources/nats/chat_stream"
 	jetstreampublisher "github.com/wendryuslima/nexus-services/internal/resources/nats/jetstream_publisher"
 )
 
@@ -81,6 +82,12 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	js, err := jetstream.New(nc)
 	if err != nil {
 		return fmt.Errorf("create JetStream client: %w", err)
+	}
+	provisionCtx, cancelProvision := context.WithTimeout(ctx, 10*time.Second)
+	err = chatstream.Ensure(provisionCtx, js)
+	cancelProvision()
+	if err != nil {
+		return fmt.Errorf("provision chat stream: %w", err)
 	}
 	publisher, err := jetstreampublisher.NewPublisher(js, partitionCount)
 	if err != nil {

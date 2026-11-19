@@ -26,11 +26,14 @@ type createDirectResponse struct {
 }
 
 type createDirectResponseData struct {
-	ID            string    `json:"id"`
-	RelatedUser   string    `json:"relatedUser"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
-	SummarySortAt time.Time `json:"summarySortAt"`
+	UnreadCount      int64     `json:"unreadCount"`
+	LastReadSequence int64     `json:"lastReadSequence"`
+	LastSequence     int64     `json:"lastSequence"`
+	ID               string    `json:"id"`
+	RelatedUser      string    `json:"relatedUser"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
+	SummarySortAt    time.Time `json:"summarySortAt"`
 }
 
 type CreateDirectHandler struct {
@@ -92,6 +95,7 @@ func (handler *CreateDirectHandler) ServeHTTP(writer http.ResponseWriter, httpRe
 			CreatedAt:     output.CreatedAt,
 			UpdatedAt:     output.UpdatedAt,
 			SummarySortAt: output.SummarySortAt,
+			UnreadCount:   output.UnreadCount, LastReadSequence: output.LastReadSequence, LastSequence: output.LastSequence,
 		},
 	})
 }

@@ -37,6 +37,7 @@ type UsersHandlers struct {
 }
 
 type ChatsHandlers struct {
+	MarkRead      http.Handler
 	List          http.Handler
 	CreateDirect  http.Handler
 	CreateMessage http.Handler
@@ -166,6 +167,9 @@ func New(
 	}
 
 	chatsRouter := http.NewServeMux()
+	if chatHandlers.MarkRead != nil {
+		chatsRouter.Handle("/v1/chats/{chatId}/read", chatHandlers.MarkRead)
+	}
 	chatsRouter.Handle(chatsPath, chatHandlers.List)
 	chatsRouter.Handle("/v1/chats/{chatId}", chatHandlers.List)
 	chatsRouter.Handle(directChatsPath, chatHandlers.CreateDirect)

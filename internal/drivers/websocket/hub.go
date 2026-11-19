@@ -171,7 +171,7 @@ func (g *Gateway) prepare(state *userState) {
 		defer g.wg.Done()
 		ctx, cancel := context.WithTimeout(state.ctx, g.config.ReadyTimeout)
 		defer cancel()
-		sub, err := g.subscriber.Subscribe(ctx, state.id, func(event ports.RealtimeMessageCreated) { g.broadcast(state, event) }, func() { g.failUser(state) })
+		sub, err := g.subscriber.Subscribe(ctx, state.id, func(event ports.RealtimeEvent) { g.broadcast(state, event) }, func() { g.failUser(state) })
 		g.mu.Lock()
 		abandoned := len(state.clients) == 0 || g.draining || state.failed || !g.subscriber.Healthy()
 		if err == nil && abandoned {
@@ -191,8 +191,8 @@ func (g *Gateway) prepare(state *userState) {
 	}()
 }
 
-func (g *Gateway) broadcast(state *userState, event ports.RealtimeMessageCreated) {
-	if ports.ValidateRealtimeMessage(event) != nil {
+func (g *Gateway) broadcast(state *userState, event ports.RealtimeEvent) {
+	if ports.ValidateRealtimeEvent(event) != nil {
 		g.failUser(state)
 		return
 	}

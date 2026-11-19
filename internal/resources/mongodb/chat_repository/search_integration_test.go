@@ -140,7 +140,8 @@ func TestParticipantSearchBeforePaginationAndDirectAccess(t *testing.T) {
 		t.Fatal("outsider can search conversations")
 	}
 	users, _ := userrepository.NewRepository(db.Collection("users"))
-	useCase, _ := applicationchats.NewListUseCase(repository, users)
+	reads, _ := NewReadRepository(db.Collection("chats"), db.Collection("timeline_items"))
+	useCase, _ := applicationchats.NewListUseCase(repository, users, reads)
 	// Fetch a chat directly without loading the sidebar pages.
 	detail, err := useCase.Execute(ctx, applicationchats.ListInput{CurrentUserID: "owner", ChatID: "chat-000"})
 	if err != nil {

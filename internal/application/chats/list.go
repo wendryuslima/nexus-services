@@ -33,6 +33,8 @@ type ListInput struct {
 }
 
 type ListedChat struct {
+	UnreadCount      int64
+	LastReadSequence int64
 	LastSequence     int64
 	ID               string
 	RelatedUser      string
@@ -63,17 +65,19 @@ type ListOutput struct {
 }
 
 type ListUseCase struct {
+	reads          ports.ChatReadRepository
 	chatRepository ports.ChatRepository
 	userRepository ports.UserRepository
 }
 
-func NewListUseCase(chatRepository ports.ChatRepository, userRepository ports.UserRepository) (*ListUseCase, error) {
-	if chatRepository == nil || userRepository == nil {
+func NewListUseCase(chatRepository ports.ChatRepository, userRepository ports.UserRepository, reads ports.ChatReadRepository) (*ListUseCase, error) {
+	if chatRepository == nil || userRepository == nil || reads == nil {
 		return nil, fmt.Errorf("%w: chat repository",
 			ErrNilDependency)
 	}
 
 	return &ListUseCase{
+		reads:          reads,
 		chatRepository: chatRepository,
 		userRepository: userRepository,
 	}, nil
@@ -134,6 +138,17 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 		return ListOutput{}, fmt.Errorf("list chats by participant: %w",
 			err)
 	}
+	ids := make([]chat.ID, len(result.Chats))
+	for i, conversation := range result.Chats {
+		if conversation == nil {
+			return ListOutput{}, fmt.Errorf("chat repository returned a nil chat")
+		}
+		ids[i] = conversation.ID()
+	}
+	states, err := useCase.reads.ReadStates(ctx, ids, currentUserID)
+	if err != nil {
+		return ListOutput{}, err
+	}
 	listedChats := make([]ListedChat, 0, len(result.Chats))
 	relatedIDs := make([]user.ID, 0, len(result.Chats))
 
@@ -148,12 +163,14 @@ func (useCase *ListUseCase) Execute(ctx context.Context, input ListInput) (ListO
 		}
 
 		listedChats = append(listedChats, ListedChat{
-			LastSequence:  conversation.LastSequence(),
-			ID:            conversation.ID().String(),
-			RelatedUser:   relatedUserID.String(),
-			CreatedAt:     conversation.CreatedAt(),
-			UpdatedAt:     conversation.UpdatedAt(),
-			SummarySortAt: conversation.SummarySortAt(),
+			LastSequence:     states[conversation.ID().String()].LastSequence,
+			UnreadCount:      states[conversation.ID().String()].UnreadCount,
+			LastReadSequence: states[conversation.ID().String()].LastReadSequence,
+			ID:               conversation.ID().String(),
+			RelatedUser:      relatedUserID.String(),
+			CreatedAt:        conversation.CreatedAt(),
+			UpdatedAt:        conversation.UpdatedAt(),
+			SummarySortAt:    conversation.SummarySortAt(),
 		})
 		relatedIDs = append(relatedIDs, relatedUserID)
 	}

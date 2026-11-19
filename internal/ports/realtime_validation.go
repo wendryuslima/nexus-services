@@ -11,6 +11,9 @@ func ValidRealtimeUserID(id string) bool {
 
 func ValidateRealtimeMessage(event RealtimeMessageCreated) error {
 	data := event.Data
+	if data.ChatState != nil && (!ValidChatReadState(*data.ChatState) || data.ChatState.ChatID != data.ChatID || data.ChatState.LastSequence < data.Sequence) {
+		return ErrInvalidMessageCreatedEvent
+	}
 	if !ValidMessageReply(data.ReplyID, data.ReplyTo, data.Sequence) {
 		return ErrInvalidMessageCreatedEvent
 	}

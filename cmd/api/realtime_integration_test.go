@@ -198,7 +198,8 @@ func TestRealtimeEndToEnd(t *testing.T) {
 	}
 	chats, _ := chatrepository.NewRepository(rawDB.Database(dbName).Collection("chats"))
 	realtime, _ := realtimepublisher.NewPublisher(nc)
-	dispatcher, _ := delivery.NewDispatchMessageCreated(chats, realtime)
+	reads, _ := chatrepository.NewReadRepository(rawDB.Database(dbName).Collection("chats"), rawDB.Database(dbName).Collection("timeline_items"))
+	dispatcher, _ := delivery.NewDispatchMessageCreated(chats, realtime, reads)
 	if err := dispatcher.Dispatch(ctx, internal); err != nil {
 		t.Fatal(err)
 	}
@@ -218,6 +219,13 @@ func TestRealtimeEndToEnd(t *testing.T) {
 		}
 		if public.Version != 1 || public.Data.ClientMessageID != clientKey || public.Data.ID != message.Data.ID || public.Data.SenderID != aliceID {
 			t.Fatalf("invalid public notification: %+v", public)
+		}
+		wantUnread := int64(0)
+		if socket == bobSocket {
+			wantUnread = 1
+		}
+		if public.Data.ChatState == nil || public.Data.ChatState.UnreadCount != wantUnread {
+			t.Fatalf("incorrect participant counter: %+v", public.Data.ChatState)
 		}
 	}
 	e2eRequest(t, alice, "POST", base+"/v1/chats/"+chat.Data.ID+"/messages", body)
@@ -248,6 +256,34 @@ func TestRealtimeEndToEnd(t *testing.T) {
 	}
 	if err := json.Unmarshal(chatsRaw, &listed); err != nil || len(listed.Data) != 1 || listed.Data[0].LastSequence != 1 {
 		t.Fatal("chat list lost persisted high-water mark")
+	}
+	bobTab := e2eSocket(t, ctx, base, bob)
+	defer bobTab.CloseNow()
+	readRaw := e2eRequest(t, bob, "POST", base+"/v1/chats/"+chat.Data.ID+"/read", map[string]int64{"throughSequence": 1})
+	var readResult struct {
+		Data ports.ChatReadState `json:"data"`
+	}
+	if err := json.Unmarshal(readRaw, &readResult); err != nil || readResult.Data.UnreadCount != 0 || readResult.Data.LastReadSequence != 1 {
+		t.Fatalf("read result: %s", readRaw)
+	}
+	for _, socket := range []*coder.Conn{bobSocket, bobTab} {
+		readCtx, stop := context.WithTimeout(ctx, 3*time.Second)
+		_, raw, err := socket.Read(readCtx)
+		stop()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var event ports.RealtimeEvent
+		if json.Unmarshal(raw, &event) != nil || event.Type != "chat.read" || ports.ValidateRealtimeEvent(event) != nil {
+			t.Fatalf("read event: %s", raw)
+		}
+	}
+	bobList := e2eRequest(t, bob, "GET", base+"/v1/chats", nil)
+	var bobChats struct {
+		Data []ports.ChatReadState `json:"data"`
+	}
+	if json.Unmarshal(bobList, &bobChats) != nil || len(bobChats.Data) != 1 || bobChats.Data[0].UnreadCount != 0 || bobChats.Data[0].LastReadSequence != 1 {
+		t.Fatalf("read not persisted: %s", bobList)
 	}
 	if os.Getenv("GARAGE_TEST_ENDPOINT") != "" {
 		e2eImageFlow(t, ctx, base, alice, bob, eve, chat.Data.ID, step, consumer, dispatcher, bobSocket, rawDB.Database(dbName))

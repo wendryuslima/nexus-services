@@ -67,7 +67,7 @@ type testSubscription struct {
 }
 
 func (s *testSubscriber) Healthy() bool { return true }
-func (s *testSubscriber) Subscribe(ctx context.Context, _ string, onEvent func(ports.RealtimeMessageCreated), _ func()) (ports.RealtimeSubscription, error) {
+func (s *testSubscriber) Subscribe(ctx context.Context, _ string, onEvent func(ports.RealtimeEvent), _ func()) (ports.RealtimeSubscription, error) {
 	s.calls.Add(1)
 	if s.gate != nil {
 		select {
@@ -77,7 +77,10 @@ func (s *testSubscriber) Subscribe(ctx context.Context, _ string, onEvent func(p
 		}
 	}
 	if s.event != nil {
-		onEvent(*s.event)
+		raw, _ := json.Marshal(*s.event)
+		var event ports.RealtimeEvent
+		_ = json.Unmarshal(raw, &event)
+		onEvent(event)
 	}
 	if s.err != nil {
 		return nil, s.err

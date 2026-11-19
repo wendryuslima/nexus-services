@@ -17,17 +17,18 @@ type chatLookup interface {
 }
 
 type DispatchMessageCreated struct {
+	reads    ports.ChatReadRepository
 	chats    chatLookup
 	realtime ports.RealtimePublisher
 }
 
 var _ ports.MessageDeliveryHandler = (*DispatchMessageCreated)(nil)
 
-func NewDispatchMessageCreated(chats chatLookup, realtime ports.RealtimePublisher) (*DispatchMessageCreated, error) {
-	if chats == nil || realtime == nil {
+func NewDispatchMessageCreated(chats chatLookup, realtime ports.RealtimePublisher, reads ports.ChatReadRepository) (*DispatchMessageCreated, error) {
+	if chats == nil || realtime == nil || reads == nil {
 		return nil, errors.New("delivery dependencies cannot be nil")
 	}
-	return &DispatchMessageCreated{chats: chats, realtime: realtime}, nil
+	return &DispatchMessageCreated{chats: chats, realtime: realtime, reads: reads}, nil
 }
 
 func validateMessageCreated(event ports.MessageCreatedEvent) error {
@@ -113,9 +114,27 @@ func (useCase *DispatchMessageCreated) Dispatch(ctx context.Context, event ports
 			CreatedAt:       event.Payload.CreatedAt.UTC(),
 		},
 	}
+	states, err := useCase.reads.ReadStates(ctx, []chat.ID{chatID}, recipientID)
+	if err != nil {
+		return err
+	}
+	recipientState, ok := states[chatID.String()]
+	if !ok {
+		return ports.ErrChatNotFound
+	}
+	publicEvent.Data.ChatState = &recipientState
 	if err := useCase.realtime.PublishMessageCreated(ctx, recipientID, publicEvent); err != nil {
 		return fmt.Errorf("publish recipient notification: %w", err)
 	}
+	states, err = useCase.reads.ReadStates(ctx, []chat.ID{chatID}, senderID)
+	if err != nil {
+		return err
+	}
+	senderState, ok := states[chatID.String()]
+	if !ok {
+		return ports.ErrChatNotFound
+	}
+	publicEvent.Data.ChatState = &senderState
 	if err := useCase.realtime.PublishMessageCreated(ctx, senderID, publicEvent); err != nil {
 		return fmt.Errorf("publish sender notification: %w", err)
 	}

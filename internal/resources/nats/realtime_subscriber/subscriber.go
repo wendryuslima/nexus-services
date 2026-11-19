@@ -93,7 +93,7 @@ func (s *Subscriber) monitor(ctx context.Context) {
 	}
 }
 
-func (s *Subscriber) Subscribe(ctx context.Context, userID string, onEvent func(ports.RealtimeMessageCreated), onFailure func()) (ports.RealtimeSubscription, error) {
+func (s *Subscriber) Subscribe(ctx context.Context, userID string, onEvent func(ports.RealtimeEvent), onFailure func()) (ports.RealtimeSubscription, error) {
 	if !ports.ValidRealtimeUserID(userID) || onEvent == nil || onFailure == nil || !s.Healthy() {
 		return nil, errors.New("realtime subscription unavailable")
 	}
@@ -103,8 +103,8 @@ func (s *Subscriber) Subscribe(ctx context.Context, userID string, onEvent func(
 	s.listeners[owned] = onFailure
 	s.mu.Unlock()
 	sub, err := s.conn.Subscribe("realtime.user."+userID, func(msg *nats.Msg) {
-		var event ports.RealtimeMessageCreated
-		if len(msg.Data) > s.maxBytes || json.Unmarshal(msg.Data, &event) != nil || ports.ValidateRealtimeMessage(event) != nil {
+		var event ports.RealtimeEvent
+		if len(msg.Data) > s.maxBytes || json.Unmarshal(msg.Data, &event) != nil || ports.ValidateRealtimeEvent(event) != nil {
 			s.logger.Warn("invalid realtime event rejected")
 			onFailure()
 			return

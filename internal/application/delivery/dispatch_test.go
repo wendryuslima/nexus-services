@@ -86,7 +86,7 @@ func TestDispatchMessageCreatedPublishesToBothParticipants(t *testing.T) {
 	event.Payload.ClientMessageID = "018f92d4-2c47-7c87-b33e-d2ea331d2ff2"
 	chats := &chatLookupStub{conversation: conversation}
 	realtime := &realtimeStub{}
-	useCase, err := NewDispatchMessageCreated(chats, realtime)
+	useCase, err := NewDispatchMessageCreated(chats, realtime, &readStub{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestDispatchPreservesReplyForBothParticipants(t *testing.T) {
 	event.Payload.ReplyID = "original"
 	event.Payload.ReplyTo = &ports.MessageReply{SenderID: "recipient-1", Sequence: 2, Content: ports.OutboxContent{Type: "IMAGE", ImageID: "original-image", Caption: "Legenda"}}
 	realtime := &realtimeStub{}
-	useCase, err := NewDispatchMessageCreated(&chatLookupStub{conversation: conversation}, realtime)
+	useCase, err := NewDispatchMessageCreated(&chatLookupStub{conversation: conversation}, realtime, &readStub{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestDispatchPartialFailureRetriesSameEvent(t *testing.T) {
 	event, conversation := fixture(t)
 	failure := errors.New("second publication failed")
 	realtime := &realtimeStub{err: failure, failOnCall: 2}
-	useCase, err := NewDispatchMessageCreated(&chatLookupStub{conversation: conversation}, realtime)
+	useCase, err := NewDispatchMessageCreated(&chatLookupStub{conversation: conversation}, realtime, &readStub{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestDispatchPartialFailureRetriesSameEvent(t *testing.T) {
 
 func TestDispatchAcceptsLegacyClientKeyAndRejectsUnsafeSequence(t *testing.T) {
 	event, conversation := fixture(t)
-	useCase, _ := NewDispatchMessageCreated(&chatLookupStub{conversation: conversation}, &realtimeStub{})
+	useCase, _ := NewDispatchMessageCreated(&chatLookupStub{conversation: conversation}, &realtimeStub{}, &readStub{})
 	if err := useCase.Dispatch(context.Background(), event); err != nil {
 		t.Fatalf("legacy event: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestDispatchMessageCreatedRejectsInvalidEnvelope(t *testing.T) {
 	event.EventType = "chat.message.created.v2"
 	chats := &chatLookupStub{conversation: conversation}
 	realtime := &realtimeStub{}
-	useCase, err := NewDispatchMessageCreated(chats, realtime)
+	useCase, err := NewDispatchMessageCreated(chats, realtime, &readStub{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -189,7 +189,7 @@ func TestDispatchMessageCreatedPropagatesRealtimeFailure(t *testing.T) {
 	event, conversation := fixture(t)
 	realtimeErr := errors.New("NATS unavailable")
 	realtime := &realtimeStub{err: realtimeErr}
-	useCase, err := NewDispatchMessageCreated(&chatLookupStub{conversation: conversation}, realtime)
+	useCase, err := NewDispatchMessageCreated(&chatLookupStub{conversation: conversation}, realtime, &readStub{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -40,8 +40,8 @@ func TestCoreNATSFanoutAcrossInstances(t *testing.T) {
 		case <-ticker.C:
 		}
 	}
-	a := make(chan ports.RealtimeMessageCreated, 1)
-	b := make(chan ports.RealtimeMessageCreated, 1)
+	a := make(chan ports.RealtimeEvent, 1)
+	b := make(chan ports.RealtimeEvent, 1)
 	failures := make(chan struct{}, 4)
 	fail := func() {
 		select {
@@ -49,12 +49,12 @@ func TestCoreNATSFanoutAcrossInstances(t *testing.T) {
 		default:
 		}
 	}
-	subscription, err := first.Subscribe(ctx, "user-1", func(event ports.RealtimeMessageCreated) { a <- event }, fail)
+	subscription, err := first.Subscribe(ctx, "user-1", func(event ports.RealtimeEvent) { a <- event }, fail)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer subscription.Close()
-	subscription2, err := second.Subscribe(ctx, "user-1", func(event ports.RealtimeMessageCreated) { b <- event }, fail)
+	subscription2, err := second.Subscribe(ctx, "user-1", func(event ports.RealtimeEvent) { b <- event }, fail)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestCoreNATSFanoutAcrossInstances(t *testing.T) {
 	if err := connection.FlushWithContext(ctx); err != nil {
 		t.Fatal(err)
 	}
-	for _, events := range []chan ports.RealtimeMessageCreated{a, b} {
+	for _, events := range []chan ports.RealtimeEvent{a, b} {
 		select {
 		case received := <-events:
 			if received.EventID != event.EventID {

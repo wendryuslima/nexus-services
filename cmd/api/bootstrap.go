@@ -246,9 +246,14 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 			err,
 		)
 	}
+	chatReads, err := chatrepository.NewReadRepository(chatsCollection, timelineCollection)
+	if err != nil {
+		return err
+	}
 	createDirectChatUseCase, err :=
 		applicationchats.NewCreateDirectUseCase(
 			applicationchats.CreateDirectDependencies{
+				Reads:          chatReads,
 				ChatRepository: chats,
 				UserRepository: users,
 				IDGenerator:    ids,
@@ -258,7 +263,7 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("create direct chat use case: %w", err)
 	}
-	listChatsUseCase, err := applicationchats.NewListUseCase(chats, users)
+	listChatsUseCase, err := applicationchats.NewListUseCase(chats, users, chatReads)
 	if err != nil {
 		return fmt.Errorf(
 			"create list chats use case: %w",
@@ -347,6 +352,14 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 		runErr = errors.Join(runErr, gateway.Shutdown(closeCtx))
 	}()
 	logger.Info("realtime gateway started", "path", "/v1/realtime")
+	markReadUseCase, err := applicationchats.NewMarkReadUseCase(chatReads, subscriber)
+	if err != nil {
+		return err
+	}
+	markReadHandler, err := chatshandler.NewMarkReadHandler(markReadUseCase, logger)
+	if err != nil {
+		return err
+	}
 	listUsersHandler, err := usershandler.NewListHandler(listUsersUseCase, logger)
 	if err != nil {
 		return fmt.Errorf("create list users handler: %w", err)
@@ -402,6 +415,7 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 			List: listUsersHandler,
 		},
 		httprouter.ChatsHandlers{
+			MarkRead:      markReadHandler,
 			List:          listChatsHandler,
 			CreateDirect:  createDirectChatHandler,
 			CreateMessage: createMessageHandler,

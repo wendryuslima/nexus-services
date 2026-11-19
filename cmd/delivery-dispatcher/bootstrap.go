@@ -16,13 +16,14 @@ import (
 	"github.com/wendryuslima/nexus-services/internal/resources/config"
 	"github.com/wendryuslima/nexus-services/internal/resources/mongodb"
 	chatrepository "github.com/wendryuslima/nexus-services/internal/resources/mongodb/chat_repository"
+	chatstream "github.com/wendryuslima/nexus-services/internal/resources/nats/chat_stream"
 	deliveryfailure "github.com/wendryuslima/nexus-services/internal/resources/nats/delivery_failure"
 	realtimepublisher "github.com/wendryuslima/nexus-services/internal/resources/nats/realtime_publisher"
 )
 
 const (
 	chatCollectionName = "chats"
-	streamName         = "CHAT_EVENTS"
+	streamName         = chatstream.Name
 	consumerName       = "MESSAGE_DELIVERY"
 	consumerFilter     = "chat.message.created.>"
 )
@@ -74,6 +75,10 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	}
 
 	provisionCtx, cancelProvision := context.WithTimeout(ctx, 10*time.Second)
+	if err := chatstream.Ensure(provisionCtx, js); err != nil {
+		cancelProvision()
+		return fmt.Errorf("provision chat stream: %w", err)
+	}
 	consumer, err := js.CreateOrUpdateConsumer(provisionCtx, streamName, jetstream.ConsumerConfig{
 		Durable:       consumerName,
 		FilterSubject: consumerFilter,
@@ -96,7 +101,15 @@ func run(ctx context.Context, logger *slog.Logger) (runErr error) {
 	if err != nil {
 		return fmt.Errorf("create delivery failure publisher: %w", err)
 	}
-	handler, err := delivery.NewDispatchMessageCreated(chats, realtime)
+	timelineCollection, err := mongoClient.Collection("timeline_items")
+	if err != nil {
+		return err
+	}
+	chatReads, err := chatrepository.NewReadRepository(chatCollection, timelineCollection)
+	if err != nil {
+		return err
+	}
+	handler, err := delivery.NewDispatchMessageCreated(chats, realtime, chatReads)
 	if err != nil {
 		return fmt.Errorf("create delivery use case: %w", err)
 	}

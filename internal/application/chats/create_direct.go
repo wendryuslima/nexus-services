@@ -17,15 +17,19 @@ type CreateDirectInput struct {
 }
 
 type CreateDirectOutput struct {
-	ID            string
-	RelatedUser   string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	SummarySortAt time.Time
-	Created       bool
+	UnreadCount      int64
+	LastReadSequence int64
+	LastSequence     int64
+	ID               string
+	RelatedUser      string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	SummarySortAt    time.Time
+	Created          bool
 }
 
 type CreateDirectDependencies struct {
+	Reads          ports.ChatReadRepository
 	ChatRepository ports.ChatRepository
 	UserRepository ports.UserRepository
 	IDGenerator    ports.IDGenerator
@@ -33,6 +37,7 @@ type CreateDirectDependencies struct {
 }
 
 type CreateDirectUseCase struct {
+	reads          ports.ChatReadRepository
 	chatRepository ports.ChatRepository
 	userRepository ports.UserRepository
 	idGenerator    ports.IDGenerator
@@ -40,7 +45,7 @@ type CreateDirectUseCase struct {
 }
 
 func NewCreateDirectUseCase(dependencies CreateDirectDependencies) (*CreateDirectUseCase, error) {
-	if dependencies.ChatRepository == nil {
+	if dependencies.ChatRepository == nil || dependencies.Reads == nil {
 		return nil, fmt.Errorf("%w: chat repository", ErrNilDependency)
 	}
 
@@ -66,6 +71,7 @@ func NewCreateDirectUseCase(dependencies CreateDirectDependencies) (*CreateDirec
 	}
 
 	return &CreateDirectUseCase{
+		reads:          dependencies.Reads,
 		chatRepository: dependencies.ChatRepository,
 		userRepository: dependencies.UserRepository,
 		idGenerator:    dependencies.IDGenerator,
@@ -140,7 +146,13 @@ func (useCase *CreateDirectUseCase) Execute(ctx context.Context, input CreateDir
 		)
 	}
 
+	states, err := useCase.reads.ReadStates(ctx, []chat.ID{storedChat.ID()}, currentUserID)
+	if err != nil {
+		return CreateDirectOutput{}, err
+	}
+	state := states[storedChat.ID().String()]
 	return CreateDirectOutput{
+		UnreadCount: state.UnreadCount, LastReadSequence: state.LastReadSequence, LastSequence: state.LastSequence,
 		ID:            storedChat.ID().String(),
 		RelatedUser:   storedRelatedUserID.String(),
 		CreatedAt:     storedChat.CreatedAt(),

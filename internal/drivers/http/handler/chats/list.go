@@ -30,6 +30,8 @@ type listResponse struct {
 }
 
 type listChatResponse struct {
+	UnreadCount      int64     `json:"unreadCount"`
+	LastReadSequence int64     `json:"lastReadSequence"`
 	LastSequence     int64     `json:"lastSequence"`
 	ID               string    `json:"id"`
 	RelatedUser      string    `json:"relatedUser"`
@@ -272,6 +274,8 @@ func mapListResponse(
 			items,
 			listChatResponse{
 				LastSequence:     listedChat.LastSequence,
+				UnreadCount:      listedChat.UnreadCount,
+				LastReadSequence: listedChat.LastReadSequence,
 				ID:               listedChat.ID,
 				RelatedUser:      listedChat.RelatedUser,
 				RelatedUserEmail: listedChat.RelatedUserEmail,

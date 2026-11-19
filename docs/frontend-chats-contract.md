@@ -1,5 +1,52 @@
 # Contrato HTTP — Chats
 
+## Mensagens não lidas
+
+As respostas de criação/obtenção, listagem, busca e detalhe de conversa incluem:
+
+| Campo | Tipo | Descrição |
+| --- | --- | --- |
+| `unreadCount` | integer | Mensagens recebidas ainda não lidas pelo usuário autenticado. Mensagens próprias não entram na contagem. |
+| `lastReadSequence` | integer | Última sequência reconhecida como lida por esse usuário; começa em zero. |
+| `lastSequence` | integer | Limite da conversa considerado no cálculo do contador. |
+
+Ao abrir a conversa e carregar a timeline recente, envie:
+
+```http
+POST /v1/chats/:chatId/read
+Content-Type: application/json
+
+{"throughSequence": 183}
+```
+
+`throughSequence` deve ser um inteiro seguro não negativo e representar a última
+sequência contígua carregada. A resposta `200 OK` é:
+
+```json
+{"data":{"chatId":"chat-id","unreadCount":0,"lastReadSequence":183,"lastSequence":183}}
+```
+
+A leitura é persistida por participante e nunca retrocede. Mensagens posteriores
+ao limite informado continuam não lidas. O servidor limita a marcação à sequência
+atual da conversa. Repetir a chamada é seguro. Um participante externo recebe
+`404 chat_not_found`; sequência inválida recebe `422 invalid_read_sequence`;
+corpo ausente ou inválido recebe `400 invalid_request`.
+
+Conversas existentes sem registro de leitura consideram as mensagens recebidas
+desde o início. A consulta da timeline, por si só, não marca leitura.
+
+O frontend marca a leitura quando a timeline recente está carregada e a aba está
+visível, repetindo para novas mensagens contíguas. Navegar pelo histórico/pesquisa
+não reconhece mensagens recentes que ainda não foram carregadas.
+
+No WebSocket, `message.created.data.chatState` contém esse mesmo estado para o
+destinatário da notificação. `chat.read` entrega `{version:1,type:"chat.read",data:...}`
+às conexões do usuário que leu, incluindo outras abas. Aplique valores absolutos,
+sem incrementar por evento. Ignore estados anteriores em `lastSequence` ou
+`lastReadSequence`, inclusive respostas HTTP antigas. Após reconectar, recarregue
+os dados por HTTP. O envio continua usando a outbox existente; notificações de
+leitura usam Core NATS, com recuperação HTTP se a conexão cair.
+
 Pesquisa por palavras do participante e abertura direta de uma conversa estão
 descritas no [contrato de pesquisa](search.md). Consultas com `q` possuem ordenação
 por criação e omitem os totais; a listagem sem pesquisa mantém o contrato abaixo.

@@ -16,6 +16,32 @@ O WebSocket é parte permanente da aplicação. As variáveis `REALTIME_*` ajust
 
 ## Componentes
 
+### Provisionamento do stream
+
+O outbox publisher e o delivery dispatcher garantem a existência de `CHAT_EVENTS`
+antes de publicar ou criar o consumidor durável. Em um broker novo, criam o stream
+com subject `chat.message.>`, armazenamento em disco, uma réplica, `LimitsPolicy`,
+`DiscardOld`, retenção de 7 dias, limite de 1 GiB e janela de deduplicação de 2 minutos.
+A criação suporta a inicialização simultânea dos workers. Streams existentes são
+reutilizados sem modificar configuração, mensagens ou consumidores.
+
+Esses limites iniciais atendem ao Compose de nó único. Em produção, provisione
+previamente as réplicas e os limites adequados ao cluster e ao volume esperado.
+As credenciais dos workers precisam consultar o stream e, quando ele estiver
+ausente, criá-lo. Erros de provisionamento impedem a inicialização e aparecem nos logs.
+
+Para testar a criação e a preservação de dados/configuração, use um broker
+JetStream isolado, sem `CHAT_EVENTS`, e execute:
+
+```powershell
+$env:NATS_PROVISION_TEST_URL = "nats://127.0.0.1:44230"
+go test ./internal/resources/nats/chat_stream -count=1
+```
+
+O teste cria e remove `CHAT_EVENTS` nesse broker; não use o broker da aplicação.
+
+### Serviços e contratos
+
 - `internal/ports/realtime*`: contrato público, validação e assinatura abstrata.
 - `internal/drivers/websocket`: handshake, hub local, buffer de preparação, filas limitadas, heartbeat e encerramento.
 - `internal/resources/nats/realtime_subscriber`: uma conexão compartilhada, assinaturas sem queue group, flush de prontidão e sinalização de perdas.
